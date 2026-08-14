@@ -1,0 +1,81 @@
+# Read QC and trimming — ports nf-core/chipseq FASTQ_FASTQC_UMITOOLS_TRIMGALORE
+# subworkflow (FASTQC + TRIMGALORE; UMITOOLS_EXTRACT is not part of the default
+# path since with_umi defaults to false).
+
+[workflow]
+name = "chipseq-read-qc"
+version = "2.1.0"
+description = "FastQC on raw reads and TrimGalore trimming with FastQC"
+
+[[rules]]
+name = "fastqc"
+description = "FastQC quality report on raw reads (nf-core/fastqc)"
+input = ["{config.raw_dir}/{pair_id}_R1.fastq.gz", "{config.raw_dir}/{pair_id}_R2.fastq.gz"]
+output = [
+    "results/fastqc/{pair_id}_1_fastqc.html",
+    "results/fastqc/{pair_id}_2_fastqc.html",
+    "results/fastqc/zips/{pair_id}_1_fastqc.zip",
+    "results/fastqc/zips/{pair_id}_2_fastqc.zip",
+]
+shell = """
+printf "%s %s\\n" {input[0]} {pair_id}_1.fastq.gz {input[1]} {pair_id}_2.fastq.gz | while read old_name new_name; do
+    [ -f "$new_name" ] || ln -s $old_name $new_name
+done
+MEM=$(echo {memory} | sed 's/[^0-9]//g')
+MB=$(( MEM * 1024 ))
+[ $MB -gt 10000 ] && MB=10000
+[ $MB -lt 100 ] && MB=100
+fastqc --quiet --threads {threads} --memory $MB {pair_id}_1.fastq.gz {pair_id}_2.fastq.gz
+mkdir -p results/fastqc/zips
+mv {pair_id}_1_fastqc.html {pair_id}_2_fastqc.html results/fastqc/
+mv {pair_id}_1_fastqc.zip {pair_id}_2_fastqc.zip results/fastqc/zips/
+"""
+when = "!config.skip_fastqc && !config.skip_qc"
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "biocontainers/fastqc:0.12.1--hdfd78af_0"
+
+[[rules]]
+name = "trimgalore"
+description = "TrimGalore adapter trimming with FastQC (nf-core/trimgalore)"
+input = ["{config.raw_dir}/{pair_id}_R1.fastq.gz", "{config.raw_dir}/{pair_id}_R2.fastq.gz"]
+output = [
+    "results/trimgalore/{pair_id}_1_val_1.fq.gz",
+    "results/trimgalore/{pair_id}_2_val_2.fq.gz",
+    "results/trimgalore/logs/{pair_id}_1.fastq.gz_trimming_report.txt",
+    "results/trimgalore/logs/{pair_id}_2.fastq.gz_trimming_report.txt",
+    "results/trimgalore/fastqc/{pair_id}_1_val_1_fastqc.html",
+    "results/trimgalore/fastqc/{pair_id}_2_val_2_fastqc.html",
+    "results/trimgalore/fastqc/zips/{pair_id}_1_val_1_fastqc.zip",
+    "results/trimgalore/fastqc/zips/{pair_id}_2_val_2_fastqc.zip",
+]
+shell = """
+[ ! -f {pair_id}_1.fastq.gz ] && ln -s {input[0]} {pair_id}_1.fastq.gz
+[ ! -f {pair_id}_2.fastq.gz ] && ln -s {input[1]} {pair_id}_2.fastq.gz
+cores=$(( {threads} - 4 ))
+if [ "$cores" -lt 1 ]; then cores=1; elif [ "$cores" -gt 8 ]; then cores=8; fi
+TRIM_ARGS="--fastqc"
+[ {config.trim_nextseq} -gt 0 ] 2>/dev/null && TRIM_ARGS="$TRIM_ARGS --nextseq {config.trim_nextseq}"
+[ {config.clip_r1} -gt 0 ] 2>/dev/null && TRIM_ARGS="$TRIM_ARGS --clip_r1 {config.clip_r1}"
+[ {config.clip_r2} -gt 0 ] 2>/dev/null && TRIM_ARGS="$TRIM_ARGS --clip_r2 {config.clip_r2}"
+[ {config.three_prime_clip_r1} -gt 0 ] 2>/dev/null && TRIM_ARGS="$TRIM_ARGS --three_prime_clip_r1 {config.three_prime_clip_r1}"
+[ {config.three_prime_clip_r2} -gt 0 ] 2>/dev/null && TRIM_ARGS="$TRIM_ARGS --three_prime_clip_r2 {config.three_prime_clip_r2}"
+trim_galore $TRIM_ARGS --cores $cores --paired --gzip {pair_id}_1.fastq.gz {pair_id}_2.fastq.gz
+mkdir -p results/trimgalore/fastqc/zips results/trimgalore/logs
+mv {pair_id}_1_val_1.fq.gz {pair_id}_2_val_2.fq.gz results/trimgalore/
+mv {pair_id}_1.fastq.gz_trimming_report.txt {pair_id}_2.fastq.gz_trimming_report.txt results/trimgalore/logs/
+mv {pair_id}_1_val_1_fastqc.html {pair_id}_2_val_2_fastqc.html results/trimgalore/fastqc/
+mv {pair_id}_1_val_1_fastqc.zip {pair_id}_2_val_2_fastqc.zip results/trimgalore/fastqc/zips/
+"""
+when = "!config.skip_trimming"
+
+[rules.resources]
+threads = 12
+memory = "72G"
+
+[rules.environment]
+docker = "biocontainers/trim-galore:0.6.7--hdfd78af_0"

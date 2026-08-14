@@ -1,0 +1,167 @@
+# Genome tracks and complexity — ports nf-core/chipseq BEDTOOLS_GENOMECOV,
+# UCSC_BEDGRAPHTOBIGWIG, DEEPTOOLS_COMPUTEMATRIX, DEEPTOOLS_PLOTPROFILE,
+# DEEPTOOLS_PLOTHEATMAP, DEEPTOOLS_PLOTFINGERPRINT and KHMER_UNIQUEKMERS.
+
+[workflow]
+name = "chipseq-tracks"
+version = "2.1.0"
+description = "bigWig tracks, deepTools plots and khmer library complexity"
+
+[[rules]]
+name = "bedtools_genomecov"
+description = "Genome coverage scaled to 1M mapped reads (local nf-core/chipseq module)"
+input = [
+    "results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam",
+    "results/bwa/merged_library/samtools_stats/{pair_id}.mLb.clN.sorted.bam.flagstat",
+]
+output = [
+    "results/bwa/merged_library/bigwig/{pair_id}.mLB.clN.bedGraph",
+    "results/bwa/merged_library/bigwig/scale/{pair_id}.mLB.clN.scale_factor.txt",
+]
+shell = """
+mkdir -p results/bwa/merged_library/bigwig/scale
+SCALE_FACTOR=$(grep '[0-9] mapped (' {input[1]} | awk '{print 1000000/$1}')
+echo $SCALE_FACTOR > {output[1]}
+bedtools genomecov -ibam {input[0]} -bg -scale $SCALE_FACTOR -pc | sort -T '.' -k1,1 -k2,2n > {output[0]}
+"""
+
+[rules.resources]
+threads = 1
+memory = "12G"
+
+[rules.environment]
+docker = "biocontainers/bedtools:2.30.0--hc088bd4_0"
+
+[[rules]]
+name = "ucsc_bedgraphtobigwig"
+description = "Convert bedGraph to bigWig (nf-core/ucsc/bedgraphtobigwig)"
+input = [
+    "results/bwa/merged_library/bigwig/{pair_id}.mLB.clN.bedGraph",
+    "{config.chrom_sizes}",
+]
+output = ["results/bwa/merged_library/bigwig/{pair_id}.mLb.clN.bigWig"]
+shell = """
+bedGraphToBigWig {input[0]} {config.chrom_sizes} {output[0]}
+"""
+
+[rules.resources]
+threads = 1
+memory = "12G"
+
+[rules.environment]
+docker = "biocontainers/ucsc-bedgraphtobigwig:445--h954228d_0"
+
+[[rules]]
+name = "deeptools_computematrix"
+description = "deepTools computeMatrix on gene body regions (nf-core/deeptools/computematrix)"
+input = [
+    "results/bwa/merged_library/bigwig/{pair_id}.mLb.clN.bigWig",
+    "{config.gene_bed}",
+]
+output = [
+    "results/bwa/merged_library/deepTools/computeMatrix/{pair_id}.mLb.clN.computeMatrix.mat.gz",
+    "results/bwa/merged_library/deepTools/computeMatrix/{pair_id}.mLb.clN.computeMatrix.vals.mat.tab",
+]
+shell = """
+mkdir -p results/bwa/merged_library/deepTools/computeMatrix
+computeMatrix scale-regions --regionBodyLength 1000 --beforeRegionStartLength 3000 --afterRegionStartLength 3000 --missingDataAsZero --skipZeros --smartLabels --regionsFileName {config.gene_bed} --scoreFileName {input[0]} --outFileName {output[0]} --outFileNameMatrix {output[1]} --numberOfProcessors {threads}
+"""
+when = "!config.skip_plot_profile"
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "biocontainers/deeptools:3.5.5--pyhdfd78af_0"
+
+[[rules]]
+name = "deeptools_plotprofile"
+description = "deepTools plotProfile (nf-core/deeptools/plotprofile)"
+input = ["results/bwa/merged_library/deepTools/computeMatrix/{pair_id}.mLb.clN.computeMatrix.mat.gz"]
+output = [
+    "results/bwa/merged_library/deepTools/plotProfile/{pair_id}.mLb.clN.plotProfile.pdf",
+    "results/bwa/merged_library/deepTools/plotProfile/{pair_id}.mLb.clN.plotProfile.tab",
+]
+shell = """
+mkdir -p results/bwa/merged_library/deepTools/plotProfile
+plotProfile --matrixFile {input[0]} --outFileName {output[0]} --outFileNameData {output[1]}
+"""
+when = "!config.skip_plot_profile"
+
+[rules.resources]
+threads = 2
+memory = "12G"
+
+[rules.environment]
+docker = "biocontainers/deeptools:3.5.5--pyhdfd78af_0"
+
+[[rules]]
+name = "deeptools_plotheatmap"
+description = "deepTools plotHeatmap (nf-core/deeptools/plotheatmap)"
+input = ["results/bwa/merged_library/deepTools/computeMatrix/{pair_id}.mLb.clN.computeMatrix.mat.gz"]
+output = [
+    "results/bwa/merged_library/deepTools/plotProfile/{pair_id}.mLb.clN.plotHeatmap.pdf",
+    "results/bwa/merged_library/deepTools/plotProfile/{pair_id}.mLb.clN.plotHeatmap.matrix.tab",
+]
+shell = """
+mkdir -p results/bwa/merged_library/deepTools/plotProfile
+plotHeatmap --matrixFile {input[0]} --outFileName {output[0]} --outFileNameMatrix {output[1]}
+"""
+when = "!config.skip_plot_profile"
+
+[rules.resources]
+threads = 2
+memory = "12G"
+
+[rules.environment]
+docker = "biocontainers/deeptools:3.5.5--pyhdfd78af_0"
+
+[[rules]]
+name = "deeptools_plotfingerprint"
+description = "deepTools plotFingerprint for IP samples with their controls (nf-core/deeptools/plotfingerprint)"
+input = [
+    "results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam",
+    "results/bwa/merged_library/{control}.mLb.clN.sorted.bam",
+]
+output = [
+    "results/bwa/merged_library/deepTools/plotFingerprint/{pair_id}.mLb.clN.plotFingerprint.pdf",
+    "results/bwa/merged_library/deepTools/plotFingerprint/{pair_id}.mLb.clN.plotFingerprint.raw.txt",
+    "results/bwa/merged_library/deepTools/plotFingerprint/{pair_id}.mLb.clN.plotFingerprint.qcmetrics.txt",
+]
+optional = true
+shell = """
+mkdir -p results/bwa/merged_library/deepTools/plotFingerprint
+plotFingerprint --skipZeros --numberOfSamples {config.fingerprint_bins} --labels {pair_id} {control} --bamfiles {input[0]} {input[1]} --plotFile {output[0]} --outRawCounts {output[1]} --outQualityMetrics {output[2]} --numberOfProcessors {threads}
+"""
+when = "!config.skip_plot_fingerprint"
+depends_on = ["filter::flagstat_filter"]
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "biocontainers/deeptools:3.5.5--pyhdfd78af_0"
+
+[[rules]]
+name = "khmer"
+description = "khmer unique k-mers estimate of genome size (nf-core/khmer/uniquekmers)"
+input = ["{config.fasta}"]
+output = [
+    "results/khmer/kmers.txt",
+    "results/khmer/report.txt",
+]
+shell = """
+mkdir -p results/khmer
+unique-kmers.py -k {config.read_length} -R results/khmer/report.txt {config.fasta}
+grep ^number results/khmer/report.txt | sed 's/^.*:.[[:blank:]]//g' > results/khmer/kmers.txt
+"""
+when = "!config.macs_gsize"
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "biocontainers/khmer:3.0.0a3--py37haa7609a_2"

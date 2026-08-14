@@ -1,0 +1,138 @@
+# oxo-flow-chipseq — ChIP-seq peak calling, QC and differential analysis
+#
+# oxo-flow port of nf-core/chipseq 2.1.0 (commit 76e2382b6d443db4dc2396e6831d1243256d80b0).
+# Default-parameters main execution path only — see README.md fidelity table for
+# every divergence and exclusion.
+
+[workflow]
+name = "chipseq"
+version = "2.1.0"
+description = "ChIP-seq peak calling, QC and differential analysis — oxo-flow port of nf-core/chipseq"
+
+[defaults]
+threads = 1
+memory = "6G"
+
+# ---------------------------------------------------------------------------
+# Input / reference files (user provides; path relative to the run directory).
+# The bwa_index directory must contain the BWA index files (*.amb, *.ann,
+# *.bwt, *.pac, *.sa) for the reference FASTA.
+# ---------------------------------------------------------------------------
+[config]
+fasta = "test/fixtures/references/genome.fa"
+fai = "test/fixtures/references/genome.fa.fai"
+gtf = "test/fixtures/references/genome.gtf"
+gene_bed = "test/fixtures/references/gene.bed"
+chrom_sizes = "test/fixtures/references/chrom.sizes"
+blacklist = "test/fixtures/references/blacklist.bed"
+bwa_index = "test/fixtures/references/bwa_index"
+raw_dir = "test/fixtures/raw"
+
+# MACS3 genome size. Empty string = derive from read length via khmer
+# (faithful to the upstream default).
+macs_gsize = ""
+read_length = 75
+
+# Sample metadata. pair_ids MUST be kept in sync with [[pairs]] (the oxo-flow
+# analogue of the nf-core samplesheet meta.id column). ip_ids lists the samples
+# that get peak calling — upstream only runs MACS3 for samples that have a
+# control; the port mirrors this with per-pair rules whose {control} input is
+# empty for control-only samples and skipped via `optional = true`.
+pair_ids = ["S1_REP1", "S1_REP2", "C1_REP1", "C1_REP2"]
+ip_ids = ["S1_REP1", "S1_REP2"]
+antibody = "H3K4me3"
+multiple_groups = false
+replicates_exist = true
+min_reps_consensus = 1
+
+# Read group / trimming
+seq_center = ""
+trim_nextseq = 0
+clip_r1 = 0
+clip_r2 = 0
+three_prime_clip_r1 = 0
+three_prime_clip_r2 = 0
+
+# Alignment / filtering
+bwa_min_score = 0
+keep_dups = false
+keep_multi_map = false
+
+# Peaks (broad mode only — the nf-core default)
+broad_cutoff = 0.1
+macs_fdr = 0
+macs_pvalue = 0
+save_macs_pileup = false
+fragment_size = 0
+fingerprint_bins = 500000
+multiqc_title = ""
+
+# Step toggles (mirror the nf-core/chipseq params.skip_* / when gates)
+skip_fastqc = false
+skip_qc = false
+skip_trimming = false
+skip_picard_metrics = false
+skip_preseq = false
+skip_spp = false
+skip_plot_profile = false
+skip_plot_fingerprint = false
+skip_peak_annotation = false
+skip_peak_qc = false
+skip_consensus_peaks = false
+skip_deseq2_qc = false
+skip_igv = false
+skip_multiqc = false
+
+# ---------------------------------------------------------------------------
+# Sample pairs. pair_id names the sample (meta.id), experiment is the
+# ChIP/experiment sample and control the matching input sample (empty for
+# input-only samples). All reads live under raw/{pair_id}_R{1,2}.fastq.gz.
+# ---------------------------------------------------------------------------
+[[pairs]]
+pair_id = "S1_REP1"
+experiment = "S1_REP1"
+control = "C1_REP1"
+
+[[pairs]]
+pair_id = "S1_REP2"
+experiment = "S1_REP2"
+control = "C1_REP2"
+
+[[pairs]]
+pair_id = "C1_REP1"
+experiment = "C1_REP1"
+
+[[pairs]]
+pair_id = "C1_REP2"
+experiment = "C1_REP2"
+
+# ---------------------------------------------------------------------------
+# Rule fragments
+# ---------------------------------------------------------------------------
+[[include]]
+path = "modules/read_qc.oxoflow"
+namespace = "qc"
+
+[[include]]
+path = "modules/alignment.oxoflow"
+namespace = "align"
+
+[[include]]
+path = "modules/filter.oxoflow"
+namespace = "filter"
+
+[[include]]
+path = "modules/tracks.oxoflow"
+namespace = "tracks"
+
+[[include]]
+path = "modules/peaks.oxoflow"
+namespace = "peaks"
+
+[[include]]
+path = "modules/consensus.oxoflow"
+namespace = "consensus"
+
+[[include]]
+path = "modules/report.oxoflow"
+namespace = "report"

@@ -1,0 +1,152 @@
+# Consensus peaks and quantification — ports nf-core/chipseq
+# BED_CONSENSUS_QUANTIFY_QC_BEDTOOLS_FEATURECOUNTS_DESEQ2. The upstream
+# subworkflow groups peaks by antibody; this port assumes a single antibody
+# (config.antibody) — multi-antibody experiments are out of scope (README).
+
+[workflow]
+name = "chipseq-consensus"
+version = "2.1.0"
+description = "Consensus peaks across IP samples, boolean annotation, featureCounts quantification and DESeq2 QC"
+
+[[rules]]
+name = "macs3_consensus"
+description = "Consensus peaks across IP samples (local nf-core/chipseq module)"
+input = []
+output = [
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.txt",
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.boolean.txt",
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.boolean.intersect.txt",
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.bed",
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.saf",
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.boolean.intersect.plot.pdf",
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.antibody.txt",
+]
+shell = """
+CONS=results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}
+NAMES=$(echo {input} | tr ' ' '\\n' | sed 's|.*/||; s|_peaks\\.broadPeak||' | tr '\\n' ',' | sed 's|,$||')
+mkdir -p $CONS
+sort -T '.' -k1,1 -k2,2n {input} | mergeBed -c 2,3,4,5,6,7,8,9 -o collapse,collapse,collapse,collapse,collapse,collapse,collapse,collapse > $CONS/{config.antibody}.consensus_peaks.txt
+python3 scripts/macs3_merged_expand.py $CONS/{config.antibody}.consensus_peaks.txt $NAMES $CONS/{config.antibody}.consensus_peaks.boolean.txt --min_replicates {config.min_reps_consensus}
+awk -v FS='\\t' -v OFS='\\t' 'FNR > 1 { print $1, $2, $3, $4, "0", "+" }' $CONS/{config.antibody}.consensus_peaks.boolean.txt > $CONS/{config.antibody}.consensus_peaks.bed
+echo -e "GeneID\\tChr\\tStart\\tEnd\\tStrand" > $CONS/{config.antibody}.consensus_peaks.saf
+awk -v FS='\\t' -v OFS='\\t' 'FNR > 1 { print $4, $1, $2, $3, "+" }' $CONS/{config.antibody}.consensus_peaks.boolean.txt >> $CONS/{config.antibody}.consensus_peaks.saf
+plot_peak_intersect.r -i $CONS/{config.antibody}.consensus_peaks.boolean.intersect.txt -o $CONS/{config.antibody}.consensus_peaks.boolean.intersect.plot.pdf
+echo "{config.antibody}.consensus_peaks.bed\\t$CONS/{config.antibody}.consensus_peaks.bed" > $CONS/{config.antibody}.consensus_peaks.antibody.txt
+"""
+when = "!config.skip_consensus_peaks && (config.multiple_groups || config.replicates_exist)"
+depends_on = ["peaks::macs3_callpeak"]
+expand_inputs = [
+    { pattern = "results/bwa/merged_library/macs3/broad_peak/{pair_id}_peaks.broadPeak", variables = { pair_id = "config.ip_ids" } },
+]
+
+[rules.resources]
+threads = 1
+memory = "6G"
+time_limit = "20h"
+
+[rules.environment]
+docker = "biocontainers/mulled-v2-2f48cc59b03027e31ead6d383fe1b8057785dd24:5d182f583f4696f4c4d9f3be93052811b383341f-0"
+
+[[rules]]
+name = "homer_annotate_consensus"
+description = "HOMER annotation of consensus peaks (nf-core/homer/annotatepeaks)"
+input = [
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.bed",
+    "{config.fasta}",
+    "{config.gtf}",
+]
+output = ["results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.annotatePeaks.txt"]
+shell = """
+annotatePeaks.pl {input[0]} {config.fasta} -gid -gtf {config.gtf} -cpu {threads} > {output[0]}
+"""
+when = "!config.skip_consensus_peaks && !config.skip_peak_annotation && (config.multiple_groups || config.replicates_exist)"
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "biocontainers/homer:4.11--pl526hc9558a2_3"
+
+[[rules]]
+name = "annotate_boolean_peaks"
+description = "Add boolean fields to annotated consensus peaks (local nf-core/chipseq module)"
+input = [
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.boolean.txt",
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.annotatePeaks.txt",
+]
+output = ["results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.boolean.annotatePeaks.txt"]
+shell = """
+cut -f2- {input[1]} | awk 'NR==1; NR > 1 {print $0 | "sort -T '.' -k1,1 -k2,2n"}' | cut -f6- > tmp.txt
+paste {input[0]} tmp.txt > {output[0]}
+"""
+when = "!config.skip_consensus_peaks && !config.skip_peak_annotation && (config.multiple_groups || config.replicates_exist)"
+
+[rules.resources]
+threads = 2
+memory = "12G"
+
+[rules.environment]
+docker = "docker.io/library/ubuntu:20.04"
+
+[[rules]]
+name = "subread_featurecounts"
+description = "Quantify reads in consensus peaks with featureCounts (nf-core/subread/featurecounts)"
+input = ["results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.saf"]
+output = [
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.featureCounts.txt",
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.featureCounts.txt.summary",
+]
+shell = """
+mkdir -p results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}
+BAMS=$(echo {input} | tr ' ' '\\n' | grep 'mLb.clN.sorted.bam$' | tr '\\n' ' ')
+featureCounts -F SAF -O --fracOverlap 0.2 -p -T {threads} -a {input[0]} -s 0 -o {output[0]} $BAMS
+"""
+when = "!config.skip_consensus_peaks && (config.multiple_groups || config.replicates_exist)"
+depends_on = ["filter::flagstat_filter", "macs3_consensus"]
+expand_inputs = [
+    { pattern = "results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam", variables = { pair_id = "config.ip_ids" } },
+]
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "biocontainers/subread:2.0.1--hed695b0_0"
+
+[[rules]]
+name = "deseq2_qc"
+description = "DESeq2 PCA and sample clustering QC (local nf-core/chipseq module)"
+input = [
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.featureCounts.txt",
+    "assets/multiqc/deseq2_pca_header.txt",
+    "assets/multiqc/deseq2_clustering_header.txt",
+]
+output = [
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/deseq2/{config.antibody}.consensus_peaks.pca.vals.txt",
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/deseq2/{config.antibody}.consensus_peaks.sample.dists.txt",
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/deseq2/{config.antibody}.consensus_peaks.pca.vals_mqc.tsv",
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/deseq2/{config.antibody}.consensus_peaks.sample.dists_mqc.tsv",
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/deseq2/{config.antibody}.consensus_peaks.plots.pdf",
+    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/deseq2/{config.antibody}.consensus_peaks.dds.RData",
+]
+shell = """
+mkdir -p results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/deseq2
+deseq2_qc.r --count_file {input[0]} --outdir ./ --outprefix {config.antibody}.consensus_peaks --cores {threads} --id_col 1 --sample_suffix '.mLb.clN.sorted.bam' --count_col 7 --vst TRUE
+sed 's/deseq2_pca/deseq2_pca_1/g' < assets/multiqc/deseq2_pca_header.txt > tmp.txt
+sed -i -e 's/DESeq2 /{config.antibody} DESeq2 /g' tmp.txt
+cat tmp.txt {config.antibody}.consensus_peaks.pca.vals.txt > {config.antibody}.consensus_peaks.pca.vals_mqc.tsv
+sed 's/deseq2_clustering/deseq2_clustering_1/g' < assets/multiqc/deseq2_clustering_header.txt > tmp.txt
+sed -i -e 's/DESeq2 /{config.antibody} DESeq2 /g' tmp.txt
+cat tmp.txt {config.antibody}.consensus_peaks.sample.dists.txt > {config.antibody}.consensus_peaks.sample.dists_mqc.tsv
+mv {config.antibody}.consensus_peaks.pca.vals.txt {config.antibody}.consensus_peaks.sample.dists.txt {config.antibody}.consensus_peaks.pca.vals_mqc.tsv {config.antibody}.consensus_peaks.sample.dists_mqc.tsv {config.antibody}.consensus_peaks.plots.pdf {config.antibody}.consensus_peaks.dds.RData results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/deseq2/
+"""
+when = "!config.skip_consensus_peaks && !config.skip_deseq2_qc && config.multiple_groups && config.replicates_exist"
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "biocontainers/mulled-v2-8849acf39a43cdd6c839a369a74c0adc823e2f91:ab110436faf952a33575c64dd74615a84011450b-0"

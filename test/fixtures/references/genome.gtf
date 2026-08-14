@@ -1,0 +1,7 @@
+chr1	test	gene	101	900	.	+	.	gene_id "gene1"; transcript_id "gene1";
+chr1	test	transcript	101	900	.	+	.	gene_id "gene1"; transcript_id "tx1";
+chr1	test	exon	101	500	.	+	.	gene_id "gene1"; transcript_id "tx1";
+chr1	test	exon	600	900	.	+	.	gene_id "gene1"; transcript_id "tx1";
+chr2	test	gene	101	700	.	-	.	gene_id "gene2"; transcript_id "gene2";
+chr2	test	transcript	101	700	.	-	.	gene_id "gene2"; transcript_id "tx2";
+chr2	test	exon	101	700	.	-	.	gene_id "gene2"; transcript_id "tx2";

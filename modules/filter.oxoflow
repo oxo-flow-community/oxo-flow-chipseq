@@ -1,0 +1,271 @@
+# BAM filtering and library QC — ports nf-core/chipseq BAM_FILTER_BAMTOOLS,
+# BAM_REMOVE_ORPHANS, BAM_SORT_STATS_SAMTOOLS (filtered), PRESEQ_LCEXTRAP,
+# BAM_PICARD_METRICS and PHANTOMPEAKQUALTOOLS subworkflows.
+
+[workflow]
+name = "chipseq-filter"
+version = "2.1.0"
+description = "BAM filtering (bamtools), orphan removal, samtools QC, preseq, picard metrics and SPP"
+
+[[rules]]
+name = "bamtools_filter"
+description = "Filter reads with samtools view + bamtools filter (local nf-core/chipseq module)"
+input = [
+    "results/bwa/merged_library/{pair_id}.mLb.mkD.sorted.bam",
+    "results/bwa/merged_library/{pair_id}.mLb.mkD.sorted.bam.bai",
+]
+output = ["results/bwa/merged_library/{pair_id}.mLb.flT.sorted.bam"]
+shell = """
+FILTER_ARGS="-F 0x004 -F 0x0008 -f 0x001"
+[ {config.keep_dups} = true ] || FILTER_ARGS="$FILTER_ARGS -F 0x0400"
+[ {config.keep_multi_map} = true ] || FILTER_ARGS="$FILTER_ARGS -q 1"
+BLACKLIST=$( [ -n "{config.blacklist}" ] && echo "-L {config.blacklist}" )
+samtools view $FILTER_ARGS $BLACKLIST -b {input[0]} | bamtools filter -out {output[0]} -script assets/bamtools_filter_pe.json
+"""
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "biocontainers/mulled-v2-0560a8046fc82aa4338588eca29ff18edab2c5aa:5687a7da26983502d0a8a9a6b05ed727c740ddc4-0"
+
+[[rules]]
+name = "sort_name"
+description = "Name-sort filtered BAM (nf-core/samtools/sort)"
+input = ["results/bwa/merged_library/{pair_id}.mLb.flT.sorted.bam", "{config.fasta}"]
+output = ["results/bwa/merged_library/{pair_id}.mLb.flT.name_sorted.bam"]
+shell = """
+samtools cat --threads {threads} {input[0]} | samtools sort -n -T {pair_id}.mLb.flT.name_sorted --threads {threads} -o {output[0]} -
+"""
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+
+[[rules]]
+name = "bam_remove_orphans"
+description = "Remove orphan reads with bampe_rm_orphan.py (local nf-core/chipseq module)"
+input = ["results/bwa/merged_library/{pair_id}.mLb.flT.name_sorted.bam"]
+output = ["results/bwa/merged_library/{pair_id}.mLb.clN.bam"]
+shell = """
+samtools sort -n -@ {threads} -o {pair_id}.mLb.clN.name.sorted.bam -T {pair_id}.mLb.clN.name.sorted {input[0]}
+python3 scripts/bampe_rm_orphan.py {pair_id}.mLb.clN.name.sorted.bam {output[0]} --only_fr_pairs
+"""
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "biocontainers/mulled-v2-57736af1eb98c01010848572c9fec9fff6ffaafd:402e865b8f6af2f3e58c6fc8d57127ff0144b2c7-0"
+
+[[rules]]
+name = "sort_filter"
+description = "Coordinate-sort filtered BAM (nf-core/samtools/sort)"
+input = ["results/bwa/merged_library/{pair_id}.mLb.clN.bam", "{config.fasta}"]
+output = ["results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam"]
+shell = """
+samtools cat --threads {threads} {input[0]} | samtools sort -T {pair_id}.mLb.clN.sorted --threads {threads} -o {output[0]} -
+"""
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+
+[[rules]]
+name = "index_filter"
+description = "Index filtered BAM (nf-core/samtools/index)"
+input = ["results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam", "{config.fasta}"]
+output = ["results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam.bai"]
+shell = """
+samtools index -@ $(({threads} - 1)) {input[0]}
+"""
+
+[rules.resources]
+threads = 2
+memory = "12G"
+
+[rules.environment]
+docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+
+[[rules]]
+name = "stats_filter"
+description = "samtools stats on filtered BAM (nf-core/samtools/stats)"
+input = [
+    "results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam",
+    "results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam.bai",
+    "{config.fasta}",
+]
+output = ["results/bwa/merged_library/samtools_stats/{pair_id}.mLb.clN.sorted.bam.stats"]
+shell = """
+mkdir -p results/bwa/merged_library/samtools_stats
+samtools stats --threads {threads} --reference {config.fasta} {input[0]} > {output[0]}
+"""
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+
+[[rules]]
+name = "flagstat_filter"
+description = "samtools flagstat on filtered BAM (nf-core/samtools/flagstat)"
+input = [
+    "results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam",
+    "results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam.bai",
+]
+output = ["results/bwa/merged_library/samtools_stats/{pair_id}.mLb.clN.sorted.bam.flagstat"]
+shell = """
+mkdir -p results/bwa/merged_library/samtools_stats
+samtools flagstat --threads {threads} {input[0]} > {output[0]}
+"""
+
+[rules.resources]
+threads = 2
+memory = "12G"
+
+[rules.environment]
+docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+
+[[rules]]
+name = "idxstats_filter"
+description = "samtools idxstats on filtered BAM (nf-core/samtools/idxstats)"
+input = [
+    "results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam",
+    "results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam.bai",
+]
+output = ["results/bwa/merged_library/samtools_stats/{pair_id}.mLb.clN.sorted.bam.idxstats"]
+shell = """
+mkdir -p results/bwa/merged_library/samtools_stats
+samtools idxstats --threads $(({threads} - 1)) {input[0]} > {output[0]}
+"""
+
+[rules.resources]
+threads = 1
+memory = "6G"
+
+[rules.environment]
+docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+
+[[rules]]
+name = "preseq"
+description = "Preseq library complexity estimation (nf-core/preseq/lcextrap)"
+input = ["results/bwa/merged_library/{pair_id}.mLb.mkD.sorted.bam"]
+output = [
+    "results/bwa/merged_library/preseq/{pair_id}.mLb.mkD.lc_extrap.txt",
+    "results/bwa/merged_library/preseq/{pair_id}.mLb.mkD.command.log",
+]
+shell = """
+mkdir -p results/bwa/merged_library/preseq
+preseq lc_extrap -verbose -bam -seed 1 -pe -output {output[0]} {input[0]} 2> {output[1]}
+"""
+when = "!config.skip_preseq"
+
+[rules.resources]
+threads = 6
+memory = "36G"
+retries = 2
+
+[rules.environment]
+docker = "biocontainers/preseq:3.1.2--h445547b_2"
+
+[[rules]]
+name = "picard_collectmultiplemetrics"
+description = "Picard CollectMultipleMetrics on filtered BAM (nf-core/picard/collectmultiplemetrics)"
+input = [
+    "results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam",
+    "results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam.bai",
+    "{config.fasta}",
+    "{config.fai}",
+]
+output = [
+    "results/bwa/merged_library/picard_metrics/{pair_id}.mLb.clN.sorted.CollectMultipleMetrics.alignment_summary_metrics",
+    "results/bwa/merged_library/picard_metrics/{pair_id}.mLb.clN.sorted.CollectMultipleMetrics.insert_size_metrics",
+    "results/bwa/merged_library/picard_metrics/{pair_id}.mLb.clN.sorted.CollectMultipleMetrics.quality_distribution_metrics",
+    "results/bwa/merged_library/picard_metrics/{pair_id}.mLb.clN.sorted.CollectMultipleMetrics.quality_by_cycle_metrics",
+    "results/bwa/merged_library/picard_metrics/{pair_id}.mLb.clN.sorted.CollectMultipleMetrics.base_distribution_by_cycle_metrics",
+    "results/bwa/merged_library/picard_metrics/{pair_id}.mLb.clN.sorted.CollectMultipleMetrics.quality_distribution.pdf",
+    "results/bwa/merged_library/picard_metrics/{pair_id}.mLb.clN.sorted.CollectMultipleMetrics.base_distribution_by_cycle.pdf",
+    "results/bwa/merged_library/picard_metrics/{pair_id}.mLb.clN.sorted.CollectMultipleMetrics.quality_by_cycle.pdf",
+    "results/bwa/merged_library/picard_metrics/{pair_id}.mLb.clN.sorted.CollectMultipleMetrics.insert_size_histogram.pdf",
+    "results/bwa/merged_library/picard_metrics/{pair_id}.mLb.clN.sorted.CollectMultipleMetrics.read_length_histogram.pdf",
+]
+shell = """
+XMX=$(( $(echo {memory} | sed 's/[^0-9]//g') * 1024 * 8 / 10 ))
+picard -Xmx${XMX}M CollectMultipleMetrics --VALIDATION_STRINGENCY LENIENT --TMP_DIR tmp --INPUT {input[0]} --OUTPUT {pair_id}.mLb.clN.sorted.CollectMultipleMetrics --REFERENCE_SEQUENCE {config.fasta}
+mkdir -p results/bwa/merged_library/picard_metrics
+mv {pair_id}.mLb.clN.sorted.CollectMultipleMetrics.* results/bwa/merged_library/picard_metrics/
+"""
+when = "!config.skip_picard_metrics"
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "biocontainers/picard:3.2.0--hdfd78af_0"
+
+[[rules]]
+name = "phantompeakqualtools"
+description = "Phantompeakqualtools strand cross-correlation (nf-core/phantompeakqualtools)"
+input = ["results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam"]
+output = [
+    "results/bwa/merged_library/phantompeakqualtools/{pair_id}.spp.out",
+    "results/bwa/merged_library/phantompeakqualtools/{pair_id}.spp.pdf",
+    "results/bwa/merged_library/phantompeakqualtools/{pair_id}.spp.Rdata",
+]
+shell = """
+RUN_SPP=`which run_spp.R`
+mkdir -p results/bwa/merged_library/phantompeakqualtools
+Rscript --max-ppsize=500000 -e "library(caTools); source(\"$RUN_SPP\")" -c="{input[0]}" -savp="{pair_id}.spp.pdf" -savd="{pair_id}.spp.Rdata" -out="{pair_id}.spp.out" -p={threads}
+mv {pair_id}.spp.pdf {pair_id}.spp.Rdata {pair_id}.spp.out results/bwa/merged_library/phantompeakqualtools/
+"""
+when = "!config.skip_spp"
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "community.wave.seqera.io/library/phantompeakqualtools:1.2.2--f8026fe2526a5e18"
+
+[[rules]]
+name = "multiqc_custom_phantompeakqualtools"
+description = "Build SPP MultiQC custom content (local nf-core/chipseq module)"
+input = [
+    "results/bwa/merged_library/phantompeakqualtools/{pair_id}.spp.out",
+    "results/bwa/merged_library/phantompeakqualtools/{pair_id}.spp.Rdata",
+    "assets/multiqc/spp_nsc_header.txt",
+    "assets/multiqc/spp_rsc_header.txt",
+    "assets/multiqc/spp_correlation_header.txt",
+]
+output = [
+    "results/bwa/merged_library/phantompeakqualtools/{pair_id}.spp_correlation_mqc.tsv",
+    "results/bwa/merged_library/phantompeakqualtools/{pair_id}.spp_nsc_mqc.tsv",
+    "results/bwa/merged_library/phantompeakqualtools/{pair_id}.spp_rsc_mqc.tsv",
+]
+shell = """
+mkdir -p results/bwa/merged_library/phantompeakqualtools
+cp assets/multiqc/spp_correlation_header.txt {pair_id}.spp_correlation_mqc.tsv
+Rscript --max-ppsize=500000 -e "load('{input[1]}'); write.table(crosscorr\\$cross.correlation, file='{pair_id}.spp_correlation_mqc.tsv', sep=',', quote=FALSE, row.names=FALSE, col.names=FALSE, append=TRUE)"
+awk -v OFS='\\t' '{print "{pair_id}", $9}' {input[0]} | cat assets/multiqc/spp_nsc_header.txt - > {pair_id}.spp_nsc_mqc.tsv
+awk -v OFS='\\t' '{print "{pair_id}", $10}' {input[0]} | cat assets/multiqc/spp_rsc_header.txt - > {pair_id}.spp_rsc_mqc.tsv
+mv {pair_id}.spp_correlation_mqc.tsv {pair_id}.spp_nsc_mqc.tsv {pair_id}.spp_rsc_mqc.tsv results/bwa/merged_library/phantompeakqualtools/
+"""
+when = "!config.skip_spp"
+
+[rules.resources]
+threads = 1
+memory = "6G"
+
+[rules.environment]
+docker = "community.wave.seqera.io/library/r-base:4.3.3--14bb33ac537aea22"
