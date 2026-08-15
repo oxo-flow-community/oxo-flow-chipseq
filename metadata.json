@@ -74,7 +74,7 @@
   ],
   "description": "ChIP-seq peak calling, QC and differential analysis for paired-end reads: FastQC and Trim Galore read QC, BWA-MEM alignment, library merge and Picard mark-duplicates, BAMTools filtering against a blacklist with orphan-read removal, preseq and phantompeakqualtools library complexity QC, bigWig tracks and deepTools QC plots, MACS3 broad-peak calling with input controls, HOMER peak annotation, FRiP scoring, consensus peaks across replicates (MACS3 merge, featureCounts quantification, DESeq2 QC), an IGV session and a MultiQC report.",
   "installation": {
-    "engine": "oxo-flow >= 0.11.0",
+    "engine": "oxo-flow >= 0.12.0",
     "toolchain": "containers (Docker/Singularity) — pinned images",
     "requirements": [
       "genome FASTA and FASTA index (fasta, fai)",
