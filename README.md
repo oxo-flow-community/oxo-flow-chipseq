@@ -1,5 +1,7 @@
 # oxo-flow-chipseq — ChIP-seq peak calling, QC and differential analysis
 
+> ★ Verified · ⇄ Official port of [`nf-core/chipseq`](https://github.com/nf-core/chipseq) @ `2.1.0` — same tools, same versions, same commands. Part of the [oxo-flow-community catalog](https://oxo-flow-community.github.io/).
+
 [![CI](https://github.com/oxo-flow-community/oxo-flow-chipseq/actions/workflows/ci.yml/badge.svg)](https://github.com/oxo-flow-community/oxo-flow-chipseq/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
@@ -9,16 +11,76 @@ filtering with blacklist and orphan-read removal, library complexity (preseq,
 phantompeakqualtools SPP), bigWig tracks, deepTools QC plots, MACS3 broad-peak
 calling with input controls, HOMER peak annotation, FRiP scoring, consensus
 peaks across replicates (MACS3 merge + featureCounts quantification + DESeq2
-QC), an IGV session and a MultiQC report. Ported to oxo-flow from
-nf-core/chipseq, paired-end, BWA aligner, broad-peak default configuration.
+QC), an IGV session and a MultiQC report. Runs paired-end samples with the BWA
+aligner and broad-peak mode by default.
+
+## Installation
+
+### 1. Install oxo-flow
+
+Requires **oxo-flow >= 0.11.0**. The recommended route is the release binary:
+
+```bash
+curl -fL -o oxo-flow.tar.gz https://github.com/Traitome/oxo-flow/releases/download/v0.11.0/oxo-flow-v0.11.0-x86_64-unknown-linux-gnu.tar.gz
+tar xzf oxo-flow.tar.gz && sudo mv oxo-flow /usr/local/bin/
+```
+
+Alternatively via conda: `conda install -c bioconda oxo-flow-cli` (note the
+bioconda package may lag behind releases; binaries for other platforms are on
+the [releases page](https://github.com/Traitome/oxo-flow/releases)).
+
+### 2. Get this workflow
+
+```bash
+git clone https://github.com/oxo-flow-community/oxo-flow-chipseq.git
+```
+
+### 3. Requirements
+
+**Reference data you must provide** — set under `[config]` in `main.oxoflow`
+(paths are relative to the run directory):
+
+- genome FASTA and its FASTA index (`fasta`, `fai`)
+- annotation GTF (`gtf`)
+- gene-body regions in BED format (`gene_bed` — upstream derives this from
+  the GTF; this port takes it pre-built)
+- chromosome sizes file (`chrom_sizes`)
+- blacklist regions in BED format (`blacklist`)
+- BWA index directory (`bwa_index`) containing the BWA index files (`*.amb`,
+  `*.ann`, `*.bwt`, `*.pac`, `*.sa`) for the reference FASTA
+- raw paired-end FASTQ reads (`raw_dir`, named `raw/{pair_id}_R{1,2}.fastq.gz`)
+  with sample metadata declared in `[[pairs]]` and `ip_ids`
+
+**Compute** — the largest rules (`bwa_mem`, `trimgalore`) request 12 threads
+and 72 GB of memory; most other rules request 6 threads and 36 GB (see
+`modules/*.oxoflow` `[rules.resources]`). A default single-rule run peaks
+around 72 GB — scale the numbers down for small machines.
+
+**Tool delivery** — containers with pinned images. Every rule pins its
+biocontainers (or nf-core / Seqera Wave) image and the workflow runs with the
+**docker** backend, so you need Docker (or Singularity) installed.
+
+## Usage
+
+```bash
+oxo-flow validate main.oxoflow
+oxo-flow dry-run main.oxoflow       # prints the 154-instance plan
+oxo-flow run main.oxoflow           # executes locally (docker backend)
+oxo-flow debug main.oxoflow         # show expanded commands
+```
+
+The workflow runs with the **docker** backend (all tools pinned to the
+upstream container images). Replace the `test/fixtures` input paths in
+`main.oxoflow` `[config]` with your own reads and references, and edit
+`[[pairs]]`/`ip_ids` to match your samplesheet. Results are written to
+`results/`.
 
 ## Source
 
-Ported from **[nf-core/chipseq](https://github.com/nf-core/chipseq)**, version
-`2.1.0` (MIT, commit `76e2382b6d443db4dc2396e6831d1243256d80b0`). This port
-is maintained independently and **may lag the upstream** — check the version
-above and the fidelity table below for the exact ported state. Created
-2026-08-15.
+Ported from **[nf-core/chipseq](https://github.com/nf-core/chipseq)** at tag
+`2.1.0` (commit `76e2382b6d443db4dc2396e6831d1243256d80b0`), licensed MIT.
+Created 2026-08-15; this workflow may lag behind upstream releases. See
+[NOTICE.md](NOTICE.md) for attribution details and the upstream license note.
 
 ## Fidelity
 
@@ -89,39 +151,18 @@ ported are listed with reasons.
   consensus inputs (`consensus_peaks.bed`, featureCounts summary) are absent;
   keep the default (`false`) or set `skip_igv`/`skip_multiqc` together.
 
-## Quickstart
+## Test
 
 ```bash
-oxo-flow validate main.oxoflow
-oxo-flow dry-run main.oxoflow       # prints the 154-instance plan
-oxo-flow run main.oxoflow           # executes locally (docker backend)
-oxo-flow debug main.oxoflow         # show expanded commands
+bash test/run.sh
 ```
 
-The workflow runs with the **docker** backend (all tools pinned to the
-upstream container images). Replace the `test/fixtures` input paths in
-`main.oxoflow` `[config]` with your own reads and references, and edit
-`[[pairs]]`/`ip_ids` to match your samplesheet. Results are written to
-`results/`.
+Runs `validate`, `lint` and `dry-run` (plus a debug-expansion check) against
+`main.oxoflow` and exits non-zero on any failure. CI runs it on every push.
 
-## Requirements
+## License
 
-- oxo-flow 0.11.0+ (binary from https://github.com/Traitome/oxo-flow/releases,
-  or `conda install -c bioconda oxo-flow-cli`; note the bioconda package may
-  lag the release)
-- Docker (for the pinned container images)
-- ~40 GB RAM for the default 36 GB process requests (see `modules/*.oxoflow`
-  `[rules.resources]`; scale down for small machines)
-
-## Layout
-
-```
-main.oxoflow          workflow definition (config, pairs, includes)
-modules/              7 rule fragments (read_qc, alignment, filter, tracks,
-                      peaks, consensus, report)
-assets/               MultiQC config, custom-content headers, bamtools config
-scripts/              upstream helper scripts (ported verbatim from bin/)
-test/fixtures/        minimal test dataset (2 IP + 2 control paired-end samples)
-test/run.sh           acceptance test (validate + lint + dry-run + debug)
-LICENSE / NOTICE.md / LICENSE.upstream / metadata.json / .github/workflows/ci.yml
-```
+This workflow is licensed under the Apache License, Version 2.0 — see
+[LICENSE](LICENSE). The port is derived from nf-core/chipseq (MIT); the
+upstream license text is preserved verbatim in
+[LICENSE.upstream](LICENSE.upstream).
