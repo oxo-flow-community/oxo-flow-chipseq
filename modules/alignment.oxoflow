@@ -19,6 +19,7 @@ input = [
 ]
 output = ["results/bwa/library/{pair_id}.Lb.bam"]
 shell = """
+set -euo pipefail
 INDEX=`find -L ./ -name "*.amb" | sed 's/\\.amb$//'`
 RG="@RG\\tID:{pair_id}\\tSM:{pair_id}\\tPL:ILLUMINA\\tLB:{pair_id}\\tPU:1"
 [ -n "{config.seq_center}" ] && RG="$RG\\tCN:{config.seq_center}"
