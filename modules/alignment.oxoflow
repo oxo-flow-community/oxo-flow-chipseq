@@ -33,7 +33,7 @@ threads = 12
 memory = "72G"
 
 [rules.environment]
-docker = "biocontainers/mulled-v2-fe8faa35dbf6dc65a0f7f5d4ea12e31a79f73e40:1bd8542a8a0b42e0981337910954371d0230828e-0"
+docker = "quay.io/biocontainers/mulled-v2-fe8faa35dbf6dc65a0f7f5d4ea12e31a79f73e40:1bd8542a8a0b42e0981337910954371d0230828e-0"
 
 [[rules]]
 name = "sort_align"
@@ -49,7 +49,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "index_align"
@@ -65,7 +65,7 @@ threads = 2
 memory = "12G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "stats_align"
@@ -86,7 +86,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "flagstat_align"
@@ -106,7 +106,7 @@ threads = 2
 memory = "12G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "idxstats_align"
@@ -126,7 +126,7 @@ threads = 1
 memory = "6G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "mergesamfiles"
@@ -144,7 +144,7 @@ threads = 1
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/picard:3.2.0--hdfd78af_0"
+docker = "quay.io/biocontainers/picard:3.2.0--hdfd78af_0"
 
 [[rules]]
 name = "markduplicates"
@@ -169,7 +169,7 @@ threads = 1
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/picard:3.2.0--hdfd78af_0"
+docker = "quay.io/biocontainers/picard:3.2.0--hdfd78af_0"
 
 [[rules]]
 name = "index_markdup"
@@ -185,7 +185,7 @@ threads = 2
 memory = "12G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "stats_markdup"
@@ -206,7 +206,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "flagstat_markdup"
@@ -226,7 +226,7 @@ threads = 2
 memory = "12G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "idxstats_markdup"
@@ -246,4 +246,4 @@ threads = 1
 memory = "6G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"

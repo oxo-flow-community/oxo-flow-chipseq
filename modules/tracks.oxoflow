@@ -30,7 +30,7 @@ threads = 1
 memory = "12G"
 
 [rules.environment]
-docker = "biocontainers/bedtools:2.30.0--hc088bd4_0"
+docker = "quay.io/biocontainers/bedtools:2.30.0--hc088bd4_0"
 
 [[rules]]
 name = "ucsc_bedgraphtobigwig"
@@ -49,7 +49,7 @@ threads = 1
 memory = "12G"
 
 [rules.environment]
-docker = "biocontainers/ucsc-bedgraphtobigwig:445--h954228d_0"
+docker = "quay.io/biocontainers/ucsc-bedgraphtobigwig:445--h954228d_0"
 
 [[rules]]
 name = "deeptools_computematrix"
@@ -73,7 +73,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/deeptools:3.5.5--pyhdfd78af_0"
+docker = "quay.io/biocontainers/deeptools:3.5.5--pyhdfd78af_0"
 
 [[rules]]
 name = "deeptools_plotprofile"
@@ -94,7 +94,7 @@ threads = 2
 memory = "12G"
 
 [rules.environment]
-docker = "biocontainers/deeptools:3.5.5--pyhdfd78af_0"
+docker = "quay.io/biocontainers/deeptools:3.5.5--pyhdfd78af_0"
 
 [[rules]]
 name = "deeptools_plotheatmap"
@@ -115,7 +115,7 @@ threads = 2
 memory = "12G"
 
 [rules.environment]
-docker = "biocontainers/deeptools:3.5.5--pyhdfd78af_0"
+docker = "quay.io/biocontainers/deeptools:3.5.5--pyhdfd78af_0"
 
 [[rules]]
 name = "deeptools_plotfingerprint"
@@ -142,7 +142,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/deeptools:3.5.5--pyhdfd78af_0"
+docker = "quay.io/biocontainers/deeptools:3.5.5--pyhdfd78af_0"
 
 [[rules]]
 name = "khmer"
@@ -164,4 +164,4 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/khmer:3.0.0a3--py37haa7609a_2"
+docker = "quay.io/biocontainers/khmer:3.0.0a3--py37haa7609a_2"

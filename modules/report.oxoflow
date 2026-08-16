@@ -49,7 +49,7 @@ threads = 1
 memory = "6G"
 
 [rules.environment]
-docker = "biocontainers/python:3.8.3"
+docker = "quay.io/biocontainers/python:3.8.3"
 
 [[rules]]
 name = "multiqc"
@@ -126,4 +126,4 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/multiqc:1.23--pyhdfd78af_0"
+docker = "quay.io/biocontainers/multiqc:1.23--pyhdfd78af_0"

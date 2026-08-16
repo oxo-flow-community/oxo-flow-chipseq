@@ -40,7 +40,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/macs3:3.0.1--py311h0152c62_3"
+docker = "quay.io/biocontainers/macs3:3.0.1--py311h0152c62_3"
 
 [[rules]]
 name = "frip_score"
@@ -65,7 +65,7 @@ threads = 1
 memory = "6G"
 
 [rules.environment]
-docker = "biocontainers/mulled-v2-8186960447c5cb2faa697666dc1e6d919ad23f3e:3127fcae6b6bdaf8181e21a26ae61231030a9fcb-0"
+docker = "quay.io/biocontainers/mulled-v2-8186960447c5cb2faa697666dc1e6d919ad23f3e:3127fcae6b6bdaf8181e21a26ae61231030a9fcb-0"
 
 [[rules]]
 name = "multiqc_custom_peaks"
@@ -116,7 +116,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/homer:4.11--pl526hc9558a2_3"
+docker = "quay.io/biocontainers/homer:4.11--pl526hc9558a2_3"
 
 [[rules]]
 name = "plot_macs3_qc"
@@ -141,7 +141,7 @@ threads = 1
 memory = "6G"
 
 [rules.environment]
-docker = "biocontainers/mulled-v2-ad9dd5f398966bf899ae05f8e7c54d0fb10cdfa7:05678da05b8e5a7a5130e90a9f9a6c585b965afa-0"
+docker = "quay.io/biocontainers/mulled-v2-ad9dd5f398966bf899ae05f8e7c54d0fb10cdfa7:05678da05b8e5a7a5130e90a9f9a6c585b965afa-0"
 
 [[rules]]
 name = "plot_homer_annotatepeaks"
@@ -169,4 +169,4 @@ threads = 1
 memory = "6G"
 
 [rules.environment]
-docker = "biocontainers/mulled-v2-ad9dd5f398966bf899ae05f8e7c54d0fb10cdfa7:05678da05b8e5a7a5130e90a9f9a6c585b965afa-0"
+docker = "quay.io/biocontainers/mulled-v2-ad9dd5f398966bf899ae05f8e7c54d0fb10cdfa7:05678da05b8e5a7a5130e90a9f9a6c585b965afa-0"

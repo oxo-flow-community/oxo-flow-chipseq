@@ -37,7 +37,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/fastqc:0.12.1--hdfd78af_0"
+docker = "quay.io/biocontainers/fastqc:0.12.1--hdfd78af_0"
 
 [[rules]]
 name = "trimgalore"
@@ -78,4 +78,4 @@ threads = 12
 memory = "72G"
 
 [rules.environment]
-docker = "biocontainers/trim-galore:0.6.7--hdfd78af_0"
+docker = "quay.io/biocontainers/trim-galore:0.6.7--hdfd78af_0"

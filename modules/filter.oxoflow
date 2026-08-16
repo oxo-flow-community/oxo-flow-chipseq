@@ -28,7 +28,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/mulled-v2-0560a8046fc82aa4338588eca29ff18edab2c5aa:5687a7da26983502d0a8a9a6b05ed727c740ddc4-0"
+docker = "quay.io/biocontainers/mulled-v2-0560a8046fc82aa4338588eca29ff18edab2c5aa:5687a7da26983502d0a8a9a6b05ed727c740ddc4-0"
 
 [[rules]]
 name = "sort_name"
@@ -44,7 +44,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "bam_remove_orphans"
@@ -61,7 +61,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/mulled-v2-57736af1eb98c01010848572c9fec9fff6ffaafd:402e865b8f6af2f3e58c6fc8d57127ff0144b2c7-0"
+docker = "quay.io/biocontainers/mulled-v2-57736af1eb98c01010848572c9fec9fff6ffaafd:402e865b8f6af2f3e58c6fc8d57127ff0144b2c7-0"
 
 [[rules]]
 name = "sort_filter"
@@ -77,7 +77,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "index_filter"
@@ -93,7 +93,7 @@ threads = 2
 memory = "12G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "stats_filter"
@@ -114,7 +114,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "flagstat_filter"
@@ -134,7 +134,7 @@ threads = 2
 memory = "12G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "idxstats_filter"
@@ -154,7 +154,7 @@ threads = 1
 memory = "6G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "preseq"
@@ -176,7 +176,7 @@ memory = "36G"
 retries = 2
 
 [rules.environment]
-docker = "biocontainers/preseq:3.1.2--h445547b_2"
+docker = "quay.io/biocontainers/preseq:3.1.2--h445547b_2"
 
 [[rules]]
 name = "picard_collectmultiplemetrics"
@@ -212,7 +212,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/picard:3.2.0--hdfd78af_0"
+docker = "quay.io/biocontainers/picard:3.2.0--hdfd78af_0"
 
 [[rules]]
 name = "phantompeakqualtools"
