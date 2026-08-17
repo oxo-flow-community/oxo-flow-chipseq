@@ -26,7 +26,7 @@ RG="@RG\\tID:{pair_id}\\tSM:{pair_id}\\tPL:ILLUMINA\\tLB:{pair_id}\\tPU:1"
 BWA_ARGS="-M"
 [ {config.bwa_min_score} -gt 0 ] 2>/dev/null && BWA_ARGS="$BWA_ARGS -T {config.bwa_min_score}"
 mkdir -p results/bwa/library
-bwa mem $BWA_ARGS -R "$RG" -t {threads} $INDEX {input[0]} {input[1]} | samtools sort -bh -F 0x0100 -O BAM --threads {threads} -o {output[0]} -
+bwa mem $BWA_ARGS -R "$RG" -t {threads} $INDEX {input[0]} {input[1]} | samtools sort -F 0x0100 -O BAM --threads {threads} -o {output[0]} -
 """
 
 [rules.resources]
