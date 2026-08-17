@@ -26,7 +26,11 @@ RG="@RG\\tID:{pair_id}\\tSM:{pair_id}\\tPL:ILLUMINA\\tLB:{pair_id}\\tPU:1"
 BWA_ARGS="-M"
 [ {config.bwa_min_score} -gt 0 ] 2>/dev/null && BWA_ARGS="$BWA_ARGS -T {config.bwa_min_score}"
 mkdir -p results/bwa/library
-bwa mem $BWA_ARGS -R "$RG" -t {threads} $INDEX {input[0]} {input[1]} | samtools sort -F 0x0100 -O BAM --threads {threads} -o {output[0]} -
+# -F 0x0100 (secondary/supplementary filter) moves into `samtools view`:
+# the pinned biocontainers image ships a samtools old enough that
+# `sort -F` and `--threads` do not exist (live: 'sort: invalid option
+# -- F'); view -F + sort -@ work on every supported version.
+bwa mem $BWA_ARGS -R "$RG" -t {effective_threads} $INDEX {input[0]} {input[1]} | samtools view -F 0x0100 -b | samtools sort -O BAM -@ {effective_threads} -o {output[0]} -
 """
 
 [rules.resources]
