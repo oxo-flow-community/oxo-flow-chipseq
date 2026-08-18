@@ -19,8 +19,15 @@ shell = """
 FILTER_ARGS="-F 0x004 -F 0x0008 -f 0x001"
 [ {config.keep_dups} = true ] || FILTER_ARGS="$FILTER_ARGS -F 0x0400"
 [ {config.keep_multi_map} = true ] || FILTER_ARGS="$FILTER_ARGS -q 1"
-BLACKLIST=$( [ -n "{config.blacklist}" ] && echo "-L {config.blacklist}" )
-samtools view $FILTER_ARGS $BLACKLIST -b {input[0]} | bamtools filter -out {output[0]} -script assets/bamtools_filter_pe.json
+# samtools view -L SELECTS blacklist-overlapping reads, so the exclusion
+# uses -U (live: -L alone inverted the filter — ~9800 reads shrank to 19,
+# macs3 had no treatment fragments left, and every downstream rule failed).
+if [ -n "{config.blacklist}" ]; then
+    samtools view $FILTER_ARGS -L {config.blacklist} -U tmp.{pair_id}.filtered.bam -b {input[0]} > /dev/null
+else
+    samtools view $FILTER_ARGS -b {input[0]} > tmp.{pair_id}.filtered.bam
+fi
+bamtools filter -in tmp.{pair_id}.filtered.bam -out {output[0]} -script assets/bamtools_filter_pe.json
 """
 
 [rules.resources]
@@ -28,7 +35,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/mulled-v2-0560a8046fc82aa4338588eca29ff18edab2c5aa:5687a7da26983502d0a8a9a6b05ed727c740ddc4-0"
+docker = "quay.io/biocontainers/mulled-v2-0560a8046fc82aa4338588eca29ff18edab2c5aa:5687a7da26983502d0a8a9a6b05ed727c740ddc4-0"
 
 [[rules]]
 name = "sort_name"
@@ -44,7 +51,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "bam_remove_orphans"
@@ -61,7 +68,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/mulled-v2-57736af1eb98c01010848572c9fec9fff6ffaafd:402e865b8f6af2f3e58c6fc8d57127ff0144b2c7-0"
+docker = "quay.io/biocontainers/mulled-v2-57736af1eb98c01010848572c9fec9fff6ffaafd:402e865b8f6af2f3e58c6fc8d57127ff0144b2c7-0"
 
 [[rules]]
 name = "sort_filter"
@@ -77,7 +84,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "index_filter"
@@ -93,7 +100,7 @@ threads = 2
 memory = "12G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "stats_filter"
@@ -114,7 +121,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "flagstat_filter"
@@ -134,7 +141,7 @@ threads = 2
 memory = "12G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "idxstats_filter"
@@ -154,7 +161,7 @@ threads = 1
 memory = "6G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "preseq"
@@ -176,7 +183,7 @@ memory = "36G"
 retries = 2
 
 [rules.environment]
-docker = "biocontainers/preseq:3.1.2--h445547b_2"
+docker = "quay.io/biocontainers/preseq:3.1.2--h445547b_2"
 
 [[rules]]
 name = "picard_collectmultiplemetrics"
@@ -200,7 +207,7 @@ output = [
     "results/bwa/merged_library/picard_metrics/{pair_id}.mLb.clN.sorted.CollectMultipleMetrics.read_length_histogram.pdf",
 ]
 shell = """
-XMX=$(( $(echo {memory} | sed 's/[^0-9]//g') * 1024 * 8 / 10 ))
+XMX=$(( {effective_memory_mb} * 8 / 10 ))
 picard -Xmx${XMX}M CollectMultipleMetrics --VALIDATION_STRINGENCY LENIENT --TMP_DIR tmp --INPUT {input[0]} --OUTPUT {pair_id}.mLb.clN.sorted.CollectMultipleMetrics --REFERENCE_SEQUENCE {config.fasta}
 mkdir -p results/bwa/merged_library/picard_metrics
 mv {pair_id}.mLb.clN.sorted.CollectMultipleMetrics.* results/bwa/merged_library/picard_metrics/
@@ -212,7 +219,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/picard:3.2.0--hdfd78af_0"
+docker = "quay.io/biocontainers/picard:3.2.0--hdfd78af_0"
 
 [[rules]]
 name = "phantompeakqualtools"
@@ -226,7 +233,17 @@ output = [
 shell = """
 RUN_SPP=`which run_spp.R`
 mkdir -p results/bwa/merged_library/phantompeakqualtools
-Rscript --max-ppsize=500000 -e "library(caTools); source(\"$RUN_SPP\")" -c="{input[0]}" -savp="{pair_id}.spp.pdf" -savd="{pair_id}.spp.Rdata" -out="{pair_id}.spp.out" -p={threads}
+# The container's default temp location is not writable by the mapped
+# user (live: 'Fatal error: cannot create R_TempDir') — point R at the
+# mounted workdir instead.
+mkdir -p tmp
+export TMPDIR=$PWD/tmp
+# The R code is single-quoted and the script path travels via the
+# environment: TOML's \" is a literal quote character, so a
+# double-quoted R expression with a nested $VAR loses its quotes at
+# the shell layer (live: 'Error: unexpected '/' in "source(/"').
+export RUN_SPP=$RUN_SPP
+Rscript --max-ppsize=500000 -e 'library(caTools); source(Sys.getenv("RUN_SPP"))' -c="{input[0]}" -savp="{pair_id}.spp.pdf" -savd="{pair_id}.spp.Rdata" -out="{pair_id}.spp.out" -p={threads}
 mv {pair_id}.spp.pdf {pair_id}.spp.Rdata {pair_id}.spp.out results/bwa/merged_library/phantompeakqualtools/
 """
 when = "!config.skip_spp"

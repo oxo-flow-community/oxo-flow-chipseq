@@ -1,1 +1,5 @@
-dummy bwa index file ann (dry-run acceptance fixture)
+30000 2 11
+0 chr1 (null)
+0 20000 0
+0 chr2 (null)
+20000 10000 0

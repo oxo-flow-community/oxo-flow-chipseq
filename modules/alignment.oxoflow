@@ -19,13 +19,18 @@ input = [
 ]
 output = ["results/bwa/library/{pair_id}.Lb.bam"]
 shell = """
+set -euo pipefail
 INDEX=`find -L ./ -name "*.amb" | sed 's/\\.amb$//'`
 RG="@RG\\tID:{pair_id}\\tSM:{pair_id}\\tPL:ILLUMINA\\tLB:{pair_id}\\tPU:1"
 [ -n "{config.seq_center}" ] && RG="$RG\\tCN:{config.seq_center}"
 BWA_ARGS="-M"
 [ {config.bwa_min_score} -gt 0 ] 2>/dev/null && BWA_ARGS="$BWA_ARGS -T {config.bwa_min_score}"
 mkdir -p results/bwa/library
-bwa mem $BWA_ARGS -R "$RG" -t {threads} $INDEX {input[0]} {input[1]} | samtools sort -bhS -F 0x0100 -O BAM --threads {threads} -o {output[0]} -
+# -F 0x0100 (secondary/supplementary filter) moves into `samtools view`:
+# the pinned biocontainers image ships a samtools old enough that
+# `sort -F` and `--threads` do not exist (live: 'sort: invalid option
+# -- F'); view -F + sort -@ work on every supported version.
+bwa mem $BWA_ARGS -R "$RG" -t {effective_threads} $INDEX {input[0]} {input[1]} | samtools view -F 0x0100 -b | samtools sort -O BAM -@ {effective_threads} -o {output[0]} -
 """
 
 [rules.resources]
@@ -33,7 +38,7 @@ threads = 12
 memory = "72G"
 
 [rules.environment]
-docker = "biocontainers/mulled-v2-fe8faa35dbf6dc65a0f7f5d4ea12e31a79f73e40:1bd8542a8a0b42e0981337910954371d0230828e-0"
+docker = "quay.io/biocontainers/mulled-v2-fe8faa35dbf6dc65a0f7f5d4ea12e31a79f73e40:1bd8542a8a0b42e0981337910954371d0230828e-0"
 
 [[rules]]
 name = "sort_align"
@@ -49,7 +54,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "index_align"
@@ -65,7 +70,7 @@ threads = 2
 memory = "12G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "stats_align"
@@ -86,7 +91,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "flagstat_align"
@@ -106,7 +111,7 @@ threads = 2
 memory = "12G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "idxstats_align"
@@ -126,7 +131,7 @@ threads = 1
 memory = "6G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "mergesamfiles"
@@ -134,7 +139,7 @@ description = "Merge per-library BAMs with Picard MergeSamFiles (nf-core/picard/
 input = ["results/bwa/library/{pair_id}.Lb.sorted.bam", "{config.fasta}"]
 output = ["results/bwa/merged_library/{pair_id}.mLb.sorted.bam"]
 shell = """
-XMX=$(( $(echo {memory} | sed 's/[^0-9]//g') * 1024 * 8 / 10 ))
+XMX=$(( {effective_memory_mb} * 8 / 10 ))
 mkdir -p results/bwa/merged_library
 picard -Xmx${XMX}M MergeSamFiles --SORT_ORDER coordinate --VALIDATION_STRINGENCY LENIENT --TMP_DIR tmp --INPUT {input[0]} --OUTPUT {output[0]}
 """
@@ -144,7 +149,7 @@ threads = 1
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/picard:3.2.0--hdfd78af_0"
+docker = "quay.io/biocontainers/picard:3.2.0--hdfd78af_0"
 
 [[rules]]
 name = "markduplicates"
@@ -159,7 +164,10 @@ output = [
     "results/bwa/merged_library/picard_metrics/{pair_id}.mLb.mkD.sorted.MarkDuplicates.metrics.txt",
 ]
 shell = """
-XMX=$(( $(echo {memory} | sed 's/[^0-9]//g') * 1024 * 8 / 10 ))
+# The heap is 80% of the machine's RAM, not of the declared HPC label:
+# the upstream 36G label rendered Xmx28G, which the container cgroup
+# (physical RAM) kills instantly (live: exit 137 on a 3.7G box).
+XMX=$(( {effective_memory_mb} * 8 / 10 ))
 mkdir -p results/bwa/merged_library/picard_metrics
 picard -Xmx${XMX}M MarkDuplicates --ASSUME_SORTED true --REMOVE_DUPLICATES false --VALIDATION_STRINGENCY LENIENT --TMP_DIR tmp --INPUT {input[0]} --OUTPUT {output[0]} --REFERENCE_SEQUENCE {config.fasta} --METRICS_FILE {output[1]}
 """
@@ -169,7 +177,7 @@ threads = 1
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/picard:3.2.0--hdfd78af_0"
+docker = "quay.io/biocontainers/picard:3.2.0--hdfd78af_0"
 
 [[rules]]
 name = "index_markdup"
@@ -185,7 +193,7 @@ threads = 2
 memory = "12G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "stats_markdup"
@@ -206,7 +214,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "flagstat_markdup"
@@ -226,7 +234,7 @@ threads = 2
 memory = "12G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "idxstats_markdup"
@@ -246,4 +254,4 @@ threads = 1
 memory = "6G"
 
 [rules.environment]
-docker = "biocontainers/samtools:1.20--h50ea8bc_0"
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"

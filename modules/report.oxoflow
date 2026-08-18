@@ -34,7 +34,7 @@ find . -name "*.antibody.txt" -exec cat {} + > replace_paths.txt
 
 cat *.igv.txt > igv_files_orig.txt
 cp {config.fasta} results/genome/genome.fa
-igv_files_to_session.py igv_session.xml igv_files_orig.txt replace_paths.txt ../../genome/genome.fa --path_prefix '../../'
+python3 scripts/igv_files_to_session.py igv_session.xml igv_files_orig.txt replace_paths.txt ../../genome/genome.fa --path_prefix '../../'
 mv igv_session.xml igv_files_orig.txt results/igv/broad_peak/
 """
 when = "!config.skip_igv"
@@ -49,7 +49,7 @@ threads = 1
 memory = "6G"
 
 [rules.environment]
-docker = "biocontainers/python:3.8.3"
+docker = "quay.io/biocontainers/python:3.8.3"
 
 [[rules]]
 name = "multiqc"
@@ -126,4 +126,4 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/multiqc:1.23--pyhdfd78af_0"
+docker = "quay.io/biocontainers/multiqc:1.23--pyhdfd78af_0"

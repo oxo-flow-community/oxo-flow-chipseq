@@ -40,7 +40,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/macs3:3.0.1--py311h0152c62_3"
+docker = "quay.io/biocontainers/macs3:3.0.1--py311h0152c62_3"
 
 [[rules]]
 name = "frip_score"
@@ -65,7 +65,7 @@ threads = 1
 memory = "6G"
 
 [rules.environment]
-docker = "biocontainers/mulled-v2-8186960447c5cb2faa697666dc1e6d919ad23f3e:3127fcae6b6bdaf8181e21a26ae61231030a9fcb-0"
+docker = "quay.io/biocontainers/mulled-v2-8186960447c5cb2faa697666dc1e6d919ad23f3e:3127fcae6b6bdaf8181e21a26ae61231030a9fcb-0"
 
 [[rules]]
 name = "multiqc_custom_peaks"
@@ -93,7 +93,9 @@ threads = 1
 memory = "6G"
 
 [rules.environment]
-docker = "nf-core/ubuntu:20.04"
+# nf-core/ubuntu was retired from Docker Hub (live: registry 'denied'
+# on pull); the library base is what the repo uses for shell-only rules.
+docker = "docker.io/library/ubuntu:20.04"
 
 [[rules]]
 name = "homer_annotatepeaks"
@@ -116,7 +118,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/homer:4.11--pl526hc9558a2_3"
+docker = "quay.io/biocontainers/homer:4.11--pl526hc9558a2_3"
 
 [[rules]]
 name = "plot_macs3_qc"
@@ -128,7 +130,7 @@ output = [
 ]
 shell = """
 mkdir -p results/bwa/merged_library/macs3/broad_peak/qc
-plot_macs3_qc.r -i $(echo {input} | tr ' ' ',') -s $(echo {input} | tr ' ' ',' | sed 's/_peaks.broadPeak//g') -o results/bwa/merged_library/macs3/broad_peak/qc -p macs3_peak
+Rscript scripts/plot_macs3_qc.r -i $(echo {input} | tr ' ' ',') -s $(echo {input} | tr ' ' ',' | sed 's/_peaks.broadPeak//g') -o results/bwa/merged_library/macs3/broad_peak/qc -p macs3_peak
 """
 when = "!config.skip_peak_annotation && !config.skip_peak_qc"
 depends_on = ["macs3_callpeak"]
@@ -141,7 +143,7 @@ threads = 1
 memory = "6G"
 
 [rules.environment]
-docker = "biocontainers/mulled-v2-ad9dd5f398966bf899ae05f8e7c54d0fb10cdfa7:05678da05b8e5a7a5130e90a9f9a6c585b965afa-0"
+docker = "quay.io/biocontainers/mulled-v2-ad9dd5f398966bf899ae05f8e7c54d0fb10cdfa7:05678da05b8e5a7a5130e90a9f9a6c585b965afa-0"
 
 [[rules]]
 name = "plot_homer_annotatepeaks"
@@ -155,7 +157,7 @@ output = [
 shell = """
 mkdir -p results/bwa/merged_library/macs3/broad_peak/qc
 ANNOS=$(echo {input} | tr ' ' '\\n' | grep 'annotatePeaks.txt$' | tr '\\n' ' ')
-plot_homer_annotatepeaks.r -i $(echo $ANNOS | tr ' ' ',') -s $(echo $ANNOS | tr ' ' ',' | sed 's/_peaks.annotatePeaks.txt//g') -p macs3_annotatePeaks -o results/bwa/merged_library/macs3/broad_peak/qc
+Rscript scripts/plot_homer_annotatepeaks.r -i $(echo $ANNOS | tr ' ' ',') -s $(echo $ANNOS | tr ' ' ',' | sed 's/_peaks.annotatePeaks.txt//g') -p macs3_annotatePeaks -o results/bwa/merged_library/macs3/broad_peak/qc
 cat results/bwa/merged_library/macs3/broad_peak/qc/macs3_annotatePeaks.summary.txt | cat assets/multiqc/peak_annotation_header.txt - > results/bwa/merged_library/macs3/broad_peak/qc/macs3_annotatePeaks.summary_mqc.tsv
 """
 when = "!config.skip_peak_annotation && !config.skip_peak_qc"
@@ -169,4 +171,4 @@ threads = 1
 memory = "6G"
 
 [rules.environment]
-docker = "biocontainers/mulled-v2-ad9dd5f398966bf899ae05f8e7c54d0fb10cdfa7:05678da05b8e5a7a5130e90a9f9a6c585b965afa-0"
+docker = "quay.io/biocontainers/mulled-v2-ad9dd5f398966bf899ae05f8e7c54d0fb10cdfa7:05678da05b8e5a7a5130e90a9f9a6c585b965afa-0"

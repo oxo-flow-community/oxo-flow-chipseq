@@ -30,8 +30,11 @@ python3 scripts/macs3_merged_expand.py $CONS/{config.antibody}.consensus_peaks.t
 awk -v FS='\\t' -v OFS='\\t' 'FNR > 1 { print $1, $2, $3, $4, "0", "+" }' $CONS/{config.antibody}.consensus_peaks.boolean.txt > $CONS/{config.antibody}.consensus_peaks.bed
 echo -e "GeneID\\tChr\\tStart\\tEnd\\tStrand" > $CONS/{config.antibody}.consensus_peaks.saf
 awk -v FS='\\t' -v OFS='\\t' 'FNR > 1 { print $4, $1, $2, $3, "+" }' $CONS/{config.antibody}.consensus_peaks.boolean.txt >> $CONS/{config.antibody}.consensus_peaks.saf
-plot_peak_intersect.r -i $CONS/{config.antibody}.consensus_peaks.boolean.intersect.txt -o $CONS/{config.antibody}.consensus_peaks.boolean.intersect.plot.pdf
-echo "{config.antibody}.consensus_peaks.bed\\t$CONS/{config.antibody}.consensus_peaks.bed" > $CONS/{config.antibody}.consensus_peaks.antibody.txt
+Rscript scripts/plot_peak_intersect.r -i $CONS/{config.antibody}.consensus_peaks.boolean.intersect.txt -o $CONS/{config.antibody}.consensus_peaks.boolean.intersect.plot.pdf
+# printf so the file carries a REAL tab: TOML's \\t reaches the shell
+# as a backslash-t and echo prints it literally — igv_files_to_session
+# splits replace_paths.txt on tabs (live: 'not enough values to unpack').
+printf "%s\\t%s\\n" "{config.antibody}.consensus_peaks.bed" "$CONS/{config.antibody}.consensus_peaks.bed" > $CONS/{config.antibody}.consensus_peaks.antibody.txt
 """
 when = "!config.skip_consensus_peaks && (config.multiple_groups || config.replicates_exist)"
 depends_on = ["peaks::macs3_callpeak"]
@@ -45,7 +48,7 @@ memory = "6G"
 time_limit = "20h"
 
 [rules.environment]
-docker = "biocontainers/mulled-v2-2f48cc59b03027e31ead6d383fe1b8057785dd24:5d182f583f4696f4c4d9f3be93052811b383341f-0"
+docker = "quay.io/biocontainers/mulled-v2-2f48cc59b03027e31ead6d383fe1b8057785dd24:5d182f583f4696f4c4d9f3be93052811b383341f-0"
 
 [[rules]]
 name = "homer_annotate_consensus"
@@ -66,7 +69,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/homer:4.11--pl526hc9558a2_3"
+docker = "quay.io/biocontainers/homer:4.11--pl526hc9558a2_3"
 
 [[rules]]
 name = "annotate_boolean_peaks"
@@ -113,7 +116,7 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/subread:2.0.1--hed695b0_0"
+docker = "quay.io/biocontainers/subread:2.0.1--hed695b0_0"
 
 [[rules]]
 name = "deseq2_qc"
@@ -133,7 +136,7 @@ output = [
 ]
 shell = """
 mkdir -p results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/deseq2
-deseq2_qc.r --count_file {input[0]} --outdir ./ --outprefix {config.antibody}.consensus_peaks --cores {threads} --id_col 1 --sample_suffix '.mLb.clN.sorted.bam' --count_col 7 --vst TRUE
+Rscript scripts/deseq2_qc.r --count_file {input[0]} --outdir ./ --outprefix {config.antibody}.consensus_peaks --cores {threads} --id_col 1 --sample_suffix '.mLb.clN.sorted.bam' --count_col 7 --vst TRUE
 sed 's/deseq2_pca/deseq2_pca_1/g' < assets/multiqc/deseq2_pca_header.txt > tmp.txt
 sed -i -e 's/DESeq2 /{config.antibody} DESeq2 /g' tmp.txt
 cat tmp.txt {config.antibody}.consensus_peaks.pca.vals.txt > {config.antibody}.consensus_peaks.pca.vals_mqc.tsv
@@ -149,4 +152,4 @@ threads = 6
 memory = "36G"
 
 [rules.environment]
-docker = "biocontainers/mulled-v2-8849acf39a43cdd6c839a369a74c0adc823e2f91:ab110436faf952a33575c64dd74615a84011450b-0"
+docker = "quay.io/biocontainers/mulled-v2-8849acf39a43cdd6c839a369a74c0adc823e2f91:ab110436faf952a33575c64dd74615a84011450b-0"
