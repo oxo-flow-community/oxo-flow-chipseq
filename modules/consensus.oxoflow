@@ -31,7 +31,10 @@ awk -v FS='\\t' -v OFS='\\t' 'FNR > 1 { print $1, $2, $3, $4, "0", "+" }' $CONS/
 echo -e "GeneID\\tChr\\tStart\\tEnd\\tStrand" > $CONS/{config.antibody}.consensus_peaks.saf
 awk -v FS='\\t' -v OFS='\\t' 'FNR > 1 { print $4, $1, $2, $3, "+" }' $CONS/{config.antibody}.consensus_peaks.boolean.txt >> $CONS/{config.antibody}.consensus_peaks.saf
 Rscript scripts/plot_peak_intersect.r -i $CONS/{config.antibody}.consensus_peaks.boolean.intersect.txt -o $CONS/{config.antibody}.consensus_peaks.boolean.intersect.plot.pdf
-echo "{config.antibody}.consensus_peaks.bed\\t$CONS/{config.antibody}.consensus_peaks.bed" > $CONS/{config.antibody}.consensus_peaks.antibody.txt
+# printf so the file carries a REAL tab: TOML's \\t reaches the shell
+# as a backslash-t and echo prints it literally — igv_files_to_session
+# splits replace_paths.txt on tabs (live: 'not enough values to unpack').
+printf "%s\\t%s\\n" "{config.antibody}.consensus_peaks.bed" "$CONS/{config.antibody}.consensus_peaks.bed" > $CONS/{config.antibody}.consensus_peaks.antibody.txt
 """
 when = "!config.skip_consensus_peaks && (config.multiple_groups || config.replicates_exist)"
 depends_on = ["peaks::macs3_callpeak"]
