@@ -34,7 +34,7 @@ find . -name "*.antibody.txt" -exec cat {} + > replace_paths.txt
 
 cat *.igv.txt > igv_files_orig.txt
 cp {config.fasta} results/genome/genome.fa
-igv_files_to_session.py igv_session.xml igv_files_orig.txt replace_paths.txt ../../genome/genome.fa --path_prefix '../../'
+python3 scripts/igv_files_to_session.py igv_session.xml igv_files_orig.txt replace_paths.txt ../../genome/genome.fa --path_prefix '../../'
 mv igv_session.xml igv_files_orig.txt results/igv/broad_peak/
 """
 when = "!config.skip_igv"

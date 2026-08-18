@@ -128,7 +128,7 @@ output = [
 ]
 shell = """
 mkdir -p results/bwa/merged_library/macs3/broad_peak/qc
-plot_macs3_qc.r -i $(echo {input} | tr ' ' ',') -s $(echo {input} | tr ' ' ',' | sed 's/_peaks.broadPeak//g') -o results/bwa/merged_library/macs3/broad_peak/qc -p macs3_peak
+Rscript scripts/plot_macs3_qc.r -i $(echo {input} | tr ' ' ',') -s $(echo {input} | tr ' ' ',' | sed 's/_peaks.broadPeak//g') -o results/bwa/merged_library/macs3/broad_peak/qc -p macs3_peak
 """
 when = "!config.skip_peak_annotation && !config.skip_peak_qc"
 depends_on = ["macs3_callpeak"]
@@ -155,7 +155,7 @@ output = [
 shell = """
 mkdir -p results/bwa/merged_library/macs3/broad_peak/qc
 ANNOS=$(echo {input} | tr ' ' '\\n' | grep 'annotatePeaks.txt$' | tr '\\n' ' ')
-plot_homer_annotatepeaks.r -i $(echo $ANNOS | tr ' ' ',') -s $(echo $ANNOS | tr ' ' ',' | sed 's/_peaks.annotatePeaks.txt//g') -p macs3_annotatePeaks -o results/bwa/merged_library/macs3/broad_peak/qc
+Rscript scripts/plot_homer_annotatepeaks.r -i $(echo $ANNOS | tr ' ' ',') -s $(echo $ANNOS | tr ' ' ',' | sed 's/_peaks.annotatePeaks.txt//g') -p macs3_annotatePeaks -o results/bwa/merged_library/macs3/broad_peak/qc
 cat results/bwa/merged_library/macs3/broad_peak/qc/macs3_annotatePeaks.summary.txt | cat assets/multiqc/peak_annotation_header.txt - > results/bwa/merged_library/macs3/broad_peak/qc/macs3_annotatePeaks.summary_mqc.tsv
 """
 when = "!config.skip_peak_annotation && !config.skip_peak_qc"
