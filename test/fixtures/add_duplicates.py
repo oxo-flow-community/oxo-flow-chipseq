@@ -52,13 +52,17 @@ def main():
             continue
         out = []
         n = len(pairs)
-        # ~30% of pairs get duplicated at 2x/4x/8x/16x (>=4 count levels).
-        # Duplicates get unique read ids (PCR duplicates are separate clusters).
+        # ~30% of pairs get duplicated at 2x-7x total multiplicity: the
+        # levels must be CONSECUTIVE — preseq lc_extrap fails when the
+        # duplicate-count histogram has a zero gap ('max count before
+        # zero is less than min required count (4)': {2,4,8,16} leaves
+        # level 3 empty). Duplicates get unique read ids (PCR duplicates
+        # are separate clusters).
         dup_idx = set(rng.sample(range(n), int(n * 0.3)))
         for i, p in enumerate(pairs):
             out.append(p)
             if i in dup_idx:
-                mult = rng.choice([1, 3, 7, 15])  # total multiplicity 2/4/8/16
+                mult = rng.choice([1, 2, 3, 4, 5, 6])  # total multiplicity 2..7
                 for k in range(mult):
                     (h1, s1, q1n, q1s), (h2, s2, q2n, q2s) = p
                     # tag goes BEFORE the /1 /2 suffix — bwa mem requires
