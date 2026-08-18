@@ -19,8 +19,15 @@ shell = """
 FILTER_ARGS="-F 0x004 -F 0x0008 -f 0x001"
 [ {config.keep_dups} = true ] || FILTER_ARGS="$FILTER_ARGS -F 0x0400"
 [ {config.keep_multi_map} = true ] || FILTER_ARGS="$FILTER_ARGS -q 1"
-BLACKLIST=$( [ -n "{config.blacklist}" ] && echo "-L {config.blacklist}" )
-samtools view $FILTER_ARGS $BLACKLIST -b {input[0]} | bamtools filter -out {output[0]} -script assets/bamtools_filter_pe.json
+# samtools view -L SELECTS blacklist-overlapping reads, so the exclusion
+# uses -U (live: -L alone inverted the filter — ~9800 reads shrank to 19,
+# macs3 had no treatment fragments left, and every downstream rule failed).
+if [ -n "{config.blacklist}" ]; then
+    samtools view $FILTER_ARGS -L {config.blacklist} -U tmp.{pair_id}.filtered.bam -b {input[0]} > /dev/null
+else
+    samtools view $FILTER_ARGS -b {input[0]} > tmp.{pair_id}.filtered.bam
+fi
+bamtools filter -in tmp.{pair_id}.filtered.bam -out {output[0]} -script assets/bamtools_filter_pe.json
 """
 
 [rules.resources]
