@@ -93,7 +93,9 @@ threads = 1
 memory = "6G"
 
 [rules.environment]
-docker = "nf-core/ubuntu:20.04"
+# nf-core/ubuntu was retired from Docker Hub (live: registry 'denied'
+# on pull); the library base is what the repo uses for shell-only rules.
+docker = "docker.io/library/ubuntu:20.04"
 
 [[rules]]
 name = "homer_annotatepeaks"
