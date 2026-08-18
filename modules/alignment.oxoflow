@@ -139,7 +139,7 @@ description = "Merge per-library BAMs with Picard MergeSamFiles (nf-core/picard/
 input = ["results/bwa/library/{pair_id}.Lb.sorted.bam", "{config.fasta}"]
 output = ["results/bwa/merged_library/{pair_id}.mLb.sorted.bam"]
 shell = """
-XMX=$(( $(echo {memory} | sed 's/[^0-9]//g') * 1024 * 8 / 10 ))
+XMX=$(( {effective_memory_mb} * 8 / 10 ))
 mkdir -p results/bwa/merged_library
 picard -Xmx${XMX}M MergeSamFiles --SORT_ORDER coordinate --VALIDATION_STRINGENCY LENIENT --TMP_DIR tmp --INPUT {input[0]} --OUTPUT {output[0]}
 """
@@ -164,7 +164,10 @@ output = [
     "results/bwa/merged_library/picard_metrics/{pair_id}.mLb.mkD.sorted.MarkDuplicates.metrics.txt",
 ]
 shell = """
-XMX=$(( $(echo {memory} | sed 's/[^0-9]//g') * 1024 * 8 / 10 ))
+# The heap is 80% of the machine's RAM, not of the declared HPC label:
+# the upstream 36G label rendered Xmx28G, which the container cgroup
+# (physical RAM) kills instantly (live: exit 137 on a 3.7G box).
+XMX=$(( {effective_memory_mb} * 8 / 10 ))
 mkdir -p results/bwa/merged_library/picard_metrics
 picard -Xmx${XMX}M MarkDuplicates --ASSUME_SORTED true --REMOVE_DUPLICATES false --VALIDATION_STRINGENCY LENIENT --TMP_DIR tmp --INPUT {input[0]} --OUTPUT {output[0]} --REFERENCE_SEQUENCE {config.fasta} --METRICS_FILE {output[1]}
 """

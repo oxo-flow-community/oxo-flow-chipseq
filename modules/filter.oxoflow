@@ -200,7 +200,7 @@ output = [
     "results/bwa/merged_library/picard_metrics/{pair_id}.mLb.clN.sorted.CollectMultipleMetrics.read_length_histogram.pdf",
 ]
 shell = """
-XMX=$(( $(echo {memory} | sed 's/[^0-9]//g') * 1024 * 8 / 10 ))
+XMX=$(( {effective_memory_mb} * 8 / 10 ))
 picard -Xmx${XMX}M CollectMultipleMetrics --VALIDATION_STRINGENCY LENIENT --TMP_DIR tmp --INPUT {input[0]} --OUTPUT {pair_id}.mLb.clN.sorted.CollectMultipleMetrics --REFERENCE_SEQUENCE {config.fasta}
 mkdir -p results/bwa/merged_library/picard_metrics
 mv {pair_id}.mLb.clN.sorted.CollectMultipleMetrics.* results/bwa/merged_library/picard_metrics/
