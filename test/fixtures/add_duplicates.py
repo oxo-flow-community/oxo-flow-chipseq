@@ -61,8 +61,12 @@ def main():
                 mult = rng.choice([1, 3, 7, 15])  # total multiplicity 2/4/8/16
                 for k in range(mult):
                     (h1, s1, q1n, q1s), (h2, s2, q2n, q2s) = p
+                    # tag goes BEFORE the /1 /2 suffix — bwa mem requires
+                    # mates to share the exact read name after stripping
+                    # the trailing /1 or /2 (live: 'paired reads have
+                    # different names: "C1_REP2_7/1_d3", "C1_REP2_7/2_d3"').
                     tag = f"_d{k}"
-                    out.append(((h1 + tag, s1, q1n, q1s), (h2 + tag, s2, q2n, q2s)))
+                    out.append(((h1[:-2] + tag + h1[-2:], s1, q1n, q1s), (h2[:-2] + tag + h2[-2:], s2, q2n, q2s)))
         write_pairs(sample, out)
         print(f"{sample}: {n} -> {len(out)} reads")
     print("duplicates added")
