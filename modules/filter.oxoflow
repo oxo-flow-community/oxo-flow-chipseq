@@ -226,6 +226,11 @@ output = [
 shell = """
 RUN_SPP=`which run_spp.R`
 mkdir -p results/bwa/merged_library/phantompeakqualtools
+# The container's default temp location is not writable by the mapped
+# user (live: 'Fatal error: cannot create R_TempDir') — point R at the
+# mounted workdir instead.
+mkdir -p tmp
+export TMPDIR=$PWD/tmp
 Rscript --max-ppsize=500000 -e "library(caTools); source(\"$RUN_SPP\")" -c="{input[0]}" -savp="{pair_id}.spp.pdf" -savd="{pair_id}.spp.Rdata" -out="{pair_id}.spp.out" -p={threads}
 mv {pair_id}.spp.pdf {pair_id}.spp.Rdata {pair_id}.spp.out results/bwa/merged_library/phantompeakqualtools/
 """
