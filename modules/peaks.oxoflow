@@ -5,11 +5,17 @@
 # samples the {control} wildcard is empty, the input is missing, and
 # `optional = true` skips the rule instance (verified behaviour, exactly the
 # upstream condition). Keep config.ip_ids in sync with [[pairs]] (see README).
+#
+# The upstream `narrow_peak` parameter switches the whole chain: MACS3 args
+# and output files (broadPeak vs narrowPeak), every directory (broad_peak vs
+# narrow_peak), the peak-QC suffix and the consensus merge columns. Each rule
+# here has a *_narrow sibling gated on config.narrow_peak — exactly one branch
+# is active per run (config.narrow_peak defaults to false).
 
 [workflow]
 name = "chipseq-peaks"
 version = "2.1.0"
-description = "MACS3 broad peak calling, FRiP scores, HOMER annotation and peak QC plots"
+description = "MACS3 peak calling (broad or narrow), FRiP scores, HOMER annotation and peak QC plots"
 
 [[rules]]
 name = "macs3_callpeak"
@@ -31,8 +37,49 @@ PEAK_ARGS="--keep-dup all --broad --broad-cutoff {config.broad_cutoff}"
 [ {config.macs_pvalue} -gt 0 ] 2>/dev/null && PEAK_ARGS="$PEAK_ARGS --pvalue {config.macs_pvalue}"
 mkdir -p results/bwa/merged_library/macs3/broad_peak
 macs3 callpeak $PEAK_ARGS --gsize $GSIZE --format BAMPE --name {pair_id} --treatment {input[0]} --control {input[1]}
+# Publish the --bdg --SPMR pileups (upstream save_macs_pileup branch); the
+# files exist only when save_macs_pileup is true.
+[ {config.save_macs_pileup} = true ] && mv {pair_id}_treat_pileup.bdg {pair_id}_control_lambda.bdg results/bwa/merged_library/macs3/broad_peak/
 mv {pair_id}_peaks.broadPeak {pair_id}_peaks.xls results/bwa/merged_library/macs3/broad_peak/
 """
+when = "!config.narrow_peak"
+depends_on = ["tracks::khmer", "filter::flagstat_filter"]
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "quay.io/biocontainers/macs3:3.0.1--py311h0152c62_3"
+
+[[rules]]
+name = "macs3_callpeak_narrow"
+description = "MACS3 narrow peak calling for IP samples (nf-core/macs3/callpeak, narrow_peak mode)"
+input = [
+    "results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam",
+    "results/bwa/merged_library/{control}.mLb.clN.sorted.bam",
+]
+output = [
+    "results/bwa/merged_library/macs3/narrow_peak/{pair_id}_peaks.narrowPeak",
+    "results/bwa/merged_library/macs3/narrow_peak/{pair_id}_peaks.xls",
+    "results/bwa/merged_library/macs3/narrow_peak/{pair_id}_summits.bed",
+]
+optional = true
+shell = """
+GSIZE=$( [ -n "{config.macs_gsize}" ] && echo {config.macs_gsize} || cat results/khmer/kmers.txt )
+# Narrow mode omits --broad/--broad-cutoff; MACS3 3.0.1 calls summits by
+# default, producing the extra *_summits.bed (upstream emits it via the
+# module's optional `*.bed` output).
+PEAK_ARGS="--keep-dup all"
+[ {config.save_macs_pileup} = true ] && PEAK_ARGS="$PEAK_ARGS --bdg --SPMR"
+[ {config.macs_fdr} -gt 0 ] 2>/dev/null && PEAK_ARGS="$PEAK_ARGS --qvalue {config.macs_fdr}"
+[ {config.macs_pvalue} -gt 0 ] 2>/dev/null && PEAK_ARGS="$PEAK_ARGS --pvalue {config.macs_pvalue}"
+mkdir -p results/bwa/merged_library/macs3/narrow_peak
+macs3 callpeak $PEAK_ARGS --gsize $GSIZE --format BAMPE --name {pair_id} --treatment {input[0]} --control {input[1]}
+[ {config.save_macs_pileup} = true ] && mv {pair_id}_treat_pileup.bdg {pair_id}_control_lambda.bdg results/bwa/merged_library/macs3/narrow_peak/
+mv {pair_id}_peaks.narrowPeak {pair_id}_peaks.xls {pair_id}_summits.bed results/bwa/merged_library/macs3/narrow_peak/
+"""
+when = "config.narrow_peak"
 depends_on = ["tracks::khmer", "filter::flagstat_filter"]
 
 [rules.resources]
@@ -58,7 +105,34 @@ READS_IN_PEAKS=$(intersectBed -a {input[0]} -b {input[2]} -bed -c -f 0.20 | awk 
 samtools flagstat {input[0]} > {pair_id}.mLb.clN.sorted.bam.flagstat
 grep 'mapped (' {pair_id}.mLb.clN.sorted.bam.flagstat | grep -v "primary" | awk -v ip="{pair_id}" -v a="$READS_IN_PEAKS" -v OFS='\\t' '{print ip, a/$1}' > {output[0]}
 """
+when = "!config.narrow_peak"
 depends_on = ["filter::flagstat_filter", "macs3_callpeak"]
+
+[rules.resources]
+threads = 1
+memory = "6G"
+
+[rules.environment]
+docker = "quay.io/biocontainers/mulled-v2-8186960447c5cb2faa697666dc1e6d919ad23f3e:3127fcae6b6bdaf8181e21a26ae61231030a9fcb-0"
+
+[[rules]]
+name = "frip_score_narrow"
+description = "FRiP score for IP samples (local nf-core/chipseq module, narrow_peak mode)"
+input = [
+    "results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam",
+    "results/bwa/merged_library/{control}.mLb.clN.sorted.bam",
+    "results/bwa/merged_library/macs3/narrow_peak/{pair_id}_peaks.narrowPeak",
+]
+output = ["results/bwa/merged_library/macs3/narrow_peak/qc/{pair_id}.FRiP.txt"]
+optional = true
+shell = """
+mkdir -p results/bwa/merged_library/macs3/narrow_peak/qc
+READS_IN_PEAKS=$(intersectBed -a {input[0]} -b {input[2]} -bed -c -f 0.20 | awk -F '\\t' '{sum += $NF} END {print sum}')
+samtools flagstat {input[0]} > {pair_id}.mLb.clN.sorted.bam.flagstat
+grep 'mapped (' {pair_id}.mLb.clN.sorted.bam.flagstat | grep -v "primary" | awk -v ip="{pair_id}" -v a="$READS_IN_PEAKS" -v OFS='\\t' '{print ip, a/$1}' > {output[0]}
+"""
+when = "config.narrow_peak"
+depends_on = ["filter::flagstat_filter", "macs3_callpeak_narrow"]
 
 [rules.resources]
 threads = 1
@@ -86,6 +160,7 @@ mkdir -p results/bwa/merged_library/macs3/broad_peak/qc
 cat {input[0]} | wc -l | awk -v ip="{pair_id}" -v OFS='\\t' '{ print ip, $1 }' | cat assets/multiqc/peak_count_header.txt - > {output[0]}
 cat assets/multiqc/frip_score_header.txt {input[1]} > {output[1]}
 """
+when = "!config.narrow_peak"
 depends_on = ["frip_score", "macs3_callpeak"]
 
 [rules.resources]
@@ -95,6 +170,35 @@ memory = "6G"
 [rules.environment]
 # nf-core/ubuntu was retired from Docker Hub (live: registry 'denied'
 # on pull); the library base is what the repo uses for shell-only rules.
+docker = "docker.io/library/ubuntu:20.04"
+
+[[rules]]
+name = "multiqc_custom_peaks_narrow"
+description = "Peak count and FRiP score MultiQC custom content for IP samples (local nf-core/chipseq module, narrow_peak mode)"
+input = [
+    "results/bwa/merged_library/macs3/narrow_peak/{pair_id}_peaks.narrowPeak",
+    "results/bwa/merged_library/macs3/narrow_peak/qc/{pair_id}.FRiP.txt",
+    "assets/multiqc/peak_count_header.txt",
+    "assets/multiqc/frip_score_header.txt",
+]
+output = [
+    "results/bwa/merged_library/macs3/narrow_peak/qc/{pair_id}.peak_count_mqc.tsv",
+    "results/bwa/merged_library/macs3/narrow_peak/qc/{pair_id}.FRiP_mqc.tsv",
+]
+optional = true
+shell = """
+mkdir -p results/bwa/merged_library/macs3/narrow_peak/qc
+cat {input[0]} | wc -l | awk -v ip="{pair_id}" -v OFS='\\t' '{ print ip, $1 }' | cat assets/multiqc/peak_count_header.txt - > {output[0]}
+cat assets/multiqc/frip_score_header.txt {input[1]} > {output[1]}
+"""
+when = "config.narrow_peak"
+depends_on = ["frip_score_narrow", "macs3_callpeak_narrow"]
+
+[rules.resources]
+threads = 1
+memory = "6G"
+
+[rules.environment]
 docker = "docker.io/library/ubuntu:20.04"
 
 [[rules]]
@@ -110,8 +214,31 @@ optional = true
 shell = """
 annotatePeaks.pl {input[0]} {config.fasta} -gid -gtf {config.gtf} -cpu {threads} > {output[0]}
 """
-when = "!config.skip_peak_annotation"
+when = "!config.narrow_peak && !config.skip_peak_annotation"
 depends_on = ["macs3_callpeak"]
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "quay.io/biocontainers/homer:4.11--pl526hc9558a2_3"
+
+[[rules]]
+name = "homer_annotatepeaks_narrow"
+description = "HOMER peak annotation for IP samples (nf-core/homer/annotatepeaks, narrow_peak mode)"
+input = [
+    "results/bwa/merged_library/macs3/narrow_peak/{pair_id}_peaks.narrowPeak",
+    "{config.fasta}",
+    "{config.gtf}",
+]
+output = ["results/bwa/merged_library/macs3/narrow_peak/{pair_id}_peaks.annotatePeaks.txt"]
+optional = true
+shell = """
+annotatePeaks.pl {input[0]} {config.fasta} -gid -gtf {config.gtf} -cpu {threads} > {output[0]}
+"""
+when = "config.narrow_peak && !config.skip_peak_annotation"
+depends_on = ["macs3_callpeak_narrow"]
 
 [rules.resources]
 threads = 6
@@ -132,10 +259,35 @@ shell = """
 mkdir -p results/bwa/merged_library/macs3/broad_peak/qc
 Rscript scripts/plot_macs3_qc.r -i $(echo {input} | tr ' ' ',') -s $(echo {input} | tr ' ' ',' | sed 's/_peaks.broadPeak//g') -o results/bwa/merged_library/macs3/broad_peak/qc -p macs3_peak
 """
-when = "!config.skip_peak_annotation && !config.skip_peak_qc"
+when = "!config.narrow_peak && !config.skip_peak_annotation && !config.skip_peak_qc"
 depends_on = ["macs3_callpeak"]
 expand_inputs = [
     { pattern = "results/bwa/merged_library/macs3/broad_peak/{pair_id}_peaks.broadPeak", variables = { pair_id = "config.ip_ids" } },
+]
+
+[rules.resources]
+threads = 1
+memory = "6G"
+
+[rules.environment]
+docker = "quay.io/biocontainers/mulled-v2-ad9dd5f398966bf899ae05f8e7c54d0fb10cdfa7:05678da05b8e5a7a5130e90a9f9a6c585b965afa-0"
+
+[[rules]]
+name = "plot_macs3_qc_narrow"
+description = "MACS3 peak QC summary plots (local nf-core/chipseq module, narrow_peak mode)"
+input = []
+output = [
+    "results/bwa/merged_library/macs3/narrow_peak/qc/macs3_peak.summary.txt",
+    "results/bwa/merged_library/macs3/narrow_peak/qc/macs3_peak.plots.pdf",
+]
+shell = """
+mkdir -p results/bwa/merged_library/macs3/narrow_peak/qc
+Rscript scripts/plot_macs3_qc.r -i $(echo {input} | tr ' ' ',') -s $(echo {input} | tr ' ' ',' | sed 's/_peaks.narrowPeak//g') -o results/bwa/merged_library/macs3/narrow_peak/qc -p macs3_peak
+"""
+when = "config.narrow_peak && !config.skip_peak_annotation && !config.skip_peak_qc"
+depends_on = ["macs3_callpeak_narrow"]
+expand_inputs = [
+    { pattern = "results/bwa/merged_library/macs3/narrow_peak/{pair_id}_peaks.narrowPeak", variables = { pair_id = "config.ip_ids" } },
 ]
 
 [rules.resources]
@@ -160,10 +312,38 @@ ANNOS=$(echo {input} | tr ' ' '\\n' | grep 'annotatePeaks.txt$' | tr '\\n' ' ')
 Rscript scripts/plot_homer_annotatepeaks.r -i $(echo $ANNOS | tr ' ' ',') -s $(echo $ANNOS | tr ' ' ',' | sed 's/_peaks.annotatePeaks.txt//g') -p macs3_annotatePeaks -o results/bwa/merged_library/macs3/broad_peak/qc
 cat results/bwa/merged_library/macs3/broad_peak/qc/macs3_annotatePeaks.summary.txt | cat assets/multiqc/peak_annotation_header.txt - > results/bwa/merged_library/macs3/broad_peak/qc/macs3_annotatePeaks.summary_mqc.tsv
 """
-when = "!config.skip_peak_annotation && !config.skip_peak_qc"
+when = "!config.narrow_peak && !config.skip_peak_annotation && !config.skip_peak_qc"
 depends_on = ["homer_annotatepeaks"]
 expand_inputs = [
     { pattern = "results/bwa/merged_library/macs3/broad_peak/{pair_id}_peaks.annotatePeaks.txt", variables = { pair_id = "config.ip_ids" } },
+]
+
+[rules.resources]
+threads = 1
+memory = "6G"
+
+[rules.environment]
+docker = "quay.io/biocontainers/mulled-v2-ad9dd5f398966bf899ae05f8e7c54d0fb10cdfa7:05678da05b8e5a7a5130e90a9f9a6c585b965afa-0"
+
+[[rules]]
+name = "plot_homer_annotatepeaks_narrow"
+description = "HOMER annotation QC summary plots (local nf-core/chipseq module, narrow_peak mode)"
+input = ["assets/multiqc/peak_annotation_header.txt"]
+output = [
+    "results/bwa/merged_library/macs3/narrow_peak/qc/macs3_annotatePeaks.summary.txt",
+    "results/bwa/merged_library/macs3/narrow_peak/qc/macs3_annotatePeaks.plots.pdf",
+    "results/bwa/merged_library/macs3/narrow_peak/qc/macs3_annotatePeaks.summary_mqc.tsv",
+]
+shell = """
+mkdir -p results/bwa/merged_library/macs3/narrow_peak/qc
+ANNOS=$(echo {input} | tr ' ' '\\n' | grep 'annotatePeaks.txt$' | tr '\\n' ' ')
+Rscript scripts/plot_homer_annotatepeaks.r -i $(echo $ANNOS | tr ' ' ',') -s $(echo $ANNOS | tr ' ' ',' | sed 's/_peaks.annotatePeaks.txt//g') -p macs3_annotatePeaks -o results/bwa/merged_library/macs3/narrow_peak/qc
+cat results/bwa/merged_library/macs3/narrow_peak/qc/macs3_annotatePeaks.summary.txt | cat assets/multiqc/peak_annotation_header.txt - > results/bwa/merged_library/macs3/narrow_peak/qc/macs3_annotatePeaks.summary_mqc.tsv
+"""
+when = "config.narrow_peak && !config.skip_peak_annotation && !config.skip_peak_qc"
+depends_on = ["homer_annotatepeaks_narrow"]
+expand_inputs = [
+    { pattern = "results/bwa/merged_library/macs3/narrow_peak/{pair_id}_peaks.annotatePeaks.txt", variables = { pair_id = "config.ip_ids" } },
 ]
 
 [rules.resources]
