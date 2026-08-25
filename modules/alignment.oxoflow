@@ -1,7 +1,10 @@
 # Alignment — ports nf-core/chipseq FASTQ_ALIGN_BWA + BAM_SORT_STATS_SAMTOOLS,
-# BAM_MERGE_SAMFILES_PICARD and BAM_MARKDUPLICATES_PICARD subworkflows.
-# The port always behaves as save_align_intermeds=true (intermediate BAMs are
-# kept under results/bwa/library/).
+# BAM_MERGE_SAMFILES_PICARD and BAM_MARKDUPLICATES_PICARD subworkflows, plus
+# the ALIGN_STAR branch (STAR_ALIGN local module). Exactly one aligner branch
+# is active per run (config.aligner, default 'bwa'): bwa_mem vs star_align
+# both produce results/bwa/library/{pair_id}.Lb.bam, so every downstream rule
+# is shared. The port always behaves as save_align_intermeds=true
+# (intermediate BAMs are kept under results/bwa/library/).
 
 [workflow]
 name = "chipseq-alignment"
@@ -18,6 +21,7 @@ input = [
     "{config.fasta}",
 ]
 output = ["results/bwa/library/{pair_id}.Lb.bam"]
+when = "config.aligner == 'bwa'"
 shell = """
 set -euo pipefail
 INDEX=`find -L ./ -name "*.amb" | sed 's/\\.amb$//'`
@@ -39,6 +43,48 @@ memory = "72G"
 
 [rules.environment]
 docker = "quay.io/biocontainers/mulled-v2-fe8faa35dbf6dc65a0f7f5d4ea12e31a79f73e40:1bd8542a8a0b42e0981337910954371d0230828e-0"
+
+[[rules]]
+name = "star_align"
+description = "STAR splice-aware read alignment (local nf-core/chipseq STAR_ALIGN module)"
+input = [
+    "results/trimgalore/{pair_id}_1_val_1.fq.gz",
+    "results/trimgalore/{pair_id}_2_val_2.fq.gz",
+    "{config.star_index}",
+]
+output = [
+    "results/bwa/library/{pair_id}.Lb.bam",
+    "results/bwa/library/log/{pair_id}.Log.final.out",
+    "results/bwa/library/log/{pair_id}.Log.out",
+    "results/bwa/library/log/{pair_id}.Log.progress.out",
+    "results/bwa/library/log/{pair_id}.SJ.out.tab",
+]
+shell = """
+# Faithful port of the 2.1.0 STAR_ALIGN module: no ext.args, so STAR runs
+# with its defaults (no --alignIntronMax / --alignEndsType, unlike the BWA
+# branch); --outSAMtype BAM Unsorted is appended by the module. The RG line
+# carries only ID/SM (+ CN when seq_center is set), exactly as upstream.
+RG="--outSAMattrRGline ID:{pair_id} 'SM:{pair_id}'"
+[ -n "{config.seq_center}" ] && RG="--outSAMattrRGline ID:{pair_id} 'SM:{pair_id}' 'CN:{config.seq_center}'"
+mkdir -p results/bwa/library/log
+STAR --genomeDir {config.star_index} --readFilesIn {input[0]} {input[1]} --runThreadN {threads} --outFileNamePrefix {pair_id}. --outSAMtype BAM Unsorted $RG
+# STAR_ALIGN emits Aligned.out.bam under its workdir; renaming to the
+# .Lb.bam name keeps the whole downstream chain (sort/merge/markdup/peaks)
+# shared with the BWA branch. The logs are published for MultiQC, which
+# auto-discovers *Log.final.out in the results/ scan (upstream feeds them
+# to MultiQC directly).
+mv {pair_id}.Aligned.out.bam {pair_id}.Lb.bam
+mv {pair_id}.Log.final.out {pair_id}.Log.out {pair_id}.Log.progress.out {pair_id}.SJ.out.tab results/bwa/library/log/
+"""
+when = "config.aligner == 'star'"
+depends_on = ["reference::star_genomegenerate"]
+
+[rules.resources]
+threads = 12
+memory = "72G"
+
+[rules.environment]
+docker = "quay.io/biocontainers/star:2.6.1d--0"
 
 [[rules]]
 name = "sort_align"

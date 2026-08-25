@@ -63,6 +63,7 @@ module_order:
       info: "This section of the report shows featureCounts results for the number of reads assigned to merged library consensus peaks."
       path_filters:
         - "./results/bwa/merged_library/macs3/broad_peak/consensus/*/*.featureCounts.txt.summary"
+        - "./results/bwa/merged_library/macs3/narrow_peak/consensus/*/*.featureCounts.txt.summary"
 
 report_section_order:
   peak_count:

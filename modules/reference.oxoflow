@@ -1,0 +1,82 @@
+# Reference preparation — ports of the upstream PREPARE_GENOME steps that are
+# meaningful for this port's plain-reference contract (all gated off by
+# default; enable with the config keys in main.oxoflow):
+#   make_gene_bed          -> GTF2BED (derive gene-body BED from the GTF)
+#   make_blacklist_regions -> GENOME_BLACKLIST_REGIONS (complement of the
+#                             blacklist against the chromosome sizes)
+#   make_star_index        -> STAR_GENOMEGENERATE (build the STAR index from
+#                             fasta + gtf into results/star/index; requires
+#                             aligner = "star" and star_index set to the
+#                             results/star/index path)
+# The upstream gunzip/untar plumbing (compressed-reference handling), the
+# custom getchromsizes and the from-scratch BWA/Bowtie2/Chromap index builders
+# are not ported — this port consumes pre-built plain files (see README).
+
+[workflow]
+name = "chipseq-reference"
+version = "2.1.0"
+description = "Reference preparation: gene BED, blacklist complement and STAR index generation"
+
+[[rules]]
+name = "gtf2bed"
+description = "Derive gene-body BED from the annotation GTF (local nf-core/chipseq module)"
+input = ["{config.gtf}"]
+output = ["results/genome/gene.bed"]
+shell = """
+mkdir -p results/genome
+perl scripts/gtf2bed {config.gtf} > results/genome/gene.bed
+"""
+when = "config.make_gene_bed"
+
+[rules.resources]
+threads = 1
+memory = "6G"
+
+[rules.environment]
+docker = "quay.io/biocontainers/perl:5.26.2"
+
+[[rules]]
+name = "blacklist_regions"
+description = "Genome intervals excluding blacklisted regions (local nf-core/chipseq module)"
+input = ["{config.chrom_sizes}", "{config.blacklist}"]
+output = ["results/genome/chrom.sizes.include_regions.bed"]
+shell = """
+mkdir -p results/genome
+sortBed -i {config.blacklist} -g {config.chrom_sizes} | complementBed -i stdin -g {config.chrom_sizes} > results/genome/chrom.sizes.include_regions.bed
+"""
+when = "config.make_blacklist_regions"
+
+[rules.resources]
+threads = 1
+memory = "6G"
+
+[rules.environment]
+docker = "quay.io/biocontainers/bedtools:2.30.0--hc088bd4_0"
+
+[[rules]]
+name = "star_genomegenerate"
+description = "Build STAR genome index from fasta + gtf (local nf-core/chipseq module)"
+input = ["{config.fasta}", "{config.gtf}", "{config.fai}"]
+output = [
+    "results/star/index/SA",
+    "results/star/index/SAindex",
+    "results/star/index/genomeParameters.txt",
+]
+shell = """
+set -euo pipefail
+mkdir -p results/star/index
+# Genome size for --genomeSAindexNbases comes from the provided .fai
+# (upstream re-derives it with `samtools faidx` in its workdir; this port
+# consumes the supplied index so the reference files are never touched).
+NUM_BASES=`gawk '{sum = sum + $2}END{if ((log(sum)/log(2))/2 - 1 > 14) {printf "%.0f", 14} else {printf "%.0f", (log(sum)/log(2))/2 - 1}}' {config.fai}`
+LIMIT=$(( {effective_memory_mb} * 1024 * 1024 - 100000000 ))
+STAR --runMode genomeGenerate --genomeDir results/star/index/ --genomeFastaFiles {config.fasta} --sjdbGTFfile {config.gtf} --runThreadN {threads} --genomeSAindexNbases $NUM_BASES --limitGenomeGenerateRAM $LIMIT
+"""
+when = "config.aligner == 'star' && config.make_star_index"
+
+[rules.resources]
+threads = 12
+memory = "72G"
+
+[rules.environment]
+docker = "quay.io/biocontainers/mulled-v2-1fa26d1ce03c295fe2fdcf85831a92fbcbd7e8c2:59cdd445419f14abac76b31dd0d71217994cbcc9-0"

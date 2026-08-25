@@ -53,12 +53,23 @@ clip_r2 = 0
 three_prime_clip_r1 = 0
 three_prime_clip_r2 = 0
 
-# Alignment / filtering
+# Alignment / filtering. aligner selects the read aligner: 'bwa' (the nf-core
+# default) or 'star'. STAR mode needs a STAR index directory (set star_index,
+# e.g. from the upstream iGenomes bundle) or the built-in generator
+# (make_star_index = true builds results/star/index from fasta + gtf — set
+# star_index = "results/star/index" in that case).
+aligner = "bwa"
+star_index = ""
+make_star_index = false
 bwa_min_score = 0
 keep_dups = false
 keep_multi_map = false
 
-# Peaks (broad mode only — the nf-core default)
+# Peaks — broad mode is the nf-core default (narrow_peak = false); setting
+# narrow_peak = true switches the whole peak chain (MACS3 narrowPeak calling,
+# FRiP/annotation/QC, consensus, IGV and MultiQC) to the upstream narrow_peak
+# layout.
+narrow_peak = false
 broad_cutoff = 0.1
 macs_fdr = 0
 macs_pvalue = 0
@@ -66,6 +77,13 @@ save_macs_pileup = false
 fragment_size = 0
 fingerprint_bins = 500000
 multiqc_title = ""
+
+# Reference preparation — ports of the upstream PREPARE_GENOME steps that can
+# run on the port's plain reference files (all off by default). When enabled,
+# point the corresponding input above at the generated file, e.g.
+# gene_bed = "results/genome/gene.bed" with make_gene_bed = true.
+make_gene_bed = false
+make_blacklist_regions = false
 
 # Step toggles (mirror the nf-core/chipseq params.skip_* / when gates)
 skip_fastqc = false
@@ -112,6 +130,10 @@ experiment = "C1_REP2"
 [[include]]
 path = "modules/read_qc.oxoflow"
 namespace = "qc"
+
+[[include]]
+path = "modules/reference.oxoflow"
+namespace = "reference"
 
 [[include]]
 path = "modules/alignment.oxoflow"
