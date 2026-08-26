@@ -54,11 +54,16 @@ three_prime_clip_r1 = 0
 three_prime_clip_r2 = 0
 
 # Alignment / filtering. aligner selects the read aligner: 'bwa' (the nf-core
-# default) or 'star'. STAR mode needs a STAR index directory (set star_index,
-# e.g. from the upstream iGenomes bundle) or the built-in generator
-# (make_star_index = true builds results/star/index from fasta + gtf — set
-# star_index = "results/star/index" in that case).
+# default), 'bowtie2', 'chromap' or 'star'. Bowtie2 mode needs a pre-built
+# Bowtie2 index directory (set bowtie2_index); chromap mode a pre-built
+# Chromap index file (set chromap_index; the from-scratch index builders are
+# not ported — see README). STAR mode needs a STAR index directory (set
+# star_index, e.g. from the upstream iGenomes bundle) or the built-in
+# generator (make_star_index = true builds results/star/index from fasta +
+# gtf — set star_index = "results/star/index" in that case).
 aligner = "bwa"
+bowtie2_index = ""
+chromap_index = ""
 star_index = ""
 make_star_index = false
 bwa_min_score = 0
