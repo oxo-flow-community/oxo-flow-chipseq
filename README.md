@@ -6,8 +6,9 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 ChIP-seq analysis pipeline: raw-read QC (FastQC), adapter trimming (Trim
-Galore), BWA-MEM (default) or STAR alignment, library merging, Picard
-mark-duplicates, BAMTools filtering with blacklist and orphan-read removal,
+Galore), BWA-MEM (default), Bowtie2, Chromap or STAR alignment, library
+merging, Picard mark-duplicates, BAMTools filtering with blacklist and
+orphan-read removal,
 library complexity (preseq, phantompeakqualtools SPP), bigWig tracks, deepTools
 QC plots, MACS3 peak calling with input controls in broad (default) or narrow
 mode, HOMER peak annotation, FRiP scoring, consensus peaks across replicates
@@ -50,16 +51,19 @@ git clone https://github.com/oxo-flow-community/oxo-flow-chipseq.git
 - blacklist regions in BED format (`blacklist`)
 - BWA index directory (`bwa_index`) containing the BWA index files (`*.amb`,
   `*.ann`, `*.bwt`, `*.pac`, `*.sa`) for the reference FASTA — for
-  `aligner = "star"`, a STAR index directory (`star_index`) instead, or build
-  one with `make_star_index = true` (then set `star_index = "results/star/index"`)
+  `aligner = "bowtie2"` a Bowtie2 index directory (`bowtie2_index`), for
+  `aligner = "chromap"` a Chromap index file (`chromap_index`, upstream
+  default `genome.index`), and for `aligner = "star"` a STAR index directory
+  (`star_index`), or build one with `make_star_index = true` (then set
+  `star_index = "results/star/index"`)
 - raw paired-end FASTQ reads (`raw_dir`, named `raw/{pair_id}_R{1,2}.fastq.gz`)
   with sample metadata declared in `[[pairs]]` and `ip_ids`
 
-**Compute** — the largest rules (`bwa_mem`, `star_align`, `trimgalore`,
-`star_genomegenerate`) request 12 threads and 72 GB of memory; most other
-rules request 6 threads and 36 GB (see `modules/*.oxoflow`
-`[rules.resources]`). A default single-rule run peaks around 72 GB — scale
-the numbers down for small machines.
+**Compute** — the largest rules (`bwa_mem`, `bowtie2_align`, `star_align`,
+`trimgalore`, `star_genomegenerate`) request 12 threads and 72 GB of memory;
+most other rules request 6 threads and 36 GB (`chromap_align` included — see
+`modules/*.oxoflow` `[rules.resources]`). A default single-rule run peaks
+around 72 GB — scale the numbers down for small machines.
 
 **Tool delivery** — containers with pinned images. Every rule pins its
 biocontainers (or nf-core / Seqera Wave) image and the workflow runs with the
@@ -69,7 +73,7 @@ biocontainers (or nf-core / Seqera Wave) image and the workflow runs with the
 
 ```bash
 oxo-flow validate main.oxoflow
-oxo-flow dry-run main.oxoflow       # prints the 186-instance plan (153 run, 33 gated off)
+oxo-flow dry-run main.oxoflow       # prints the 194-instance plan (153 run, 41 gated off)
 oxo-flow run main.oxoflow           # executes locally (docker backend)
 oxo-flow debug main.oxoflow         # show expanded commands
 ```
@@ -79,6 +83,8 @@ unchanged when all are off):
 
 | Key | Effect |
 |---|---|
+| `aligner = "bowtie2"` | Bowtie2 alignment instead of BWA; requires `bowtie2_index` (pre-built Bowtie2 index directory) |
+| `aligner = "chromap"` | Chromap alignment instead of BWA; requires `chromap_index` (pre-built Chromap index file) |
 | `aligner = "star"` | STAR alignment instead of BWA; requires `star_index` (or `make_star_index = true` + `star_index = "results/star/index"`) |
 | `narrow_peak = true` | whole peak chain in narrowPeak mode (MACS3 args, `narrow_peak/` dirs, consensus merge columns, IGV/MultiQC outputs) |
 | `make_gene_bed = true` | derive `results/genome/gene.bed` from the GTF (then point `gene_bed` at it) |
@@ -110,6 +116,8 @@ ported are listed with reasons.
 | BWA_MEM | `bwa_mem` | bwa 0.7.17, samtools 1.17 | identical (`-M -R '@RG...'`, secondary filter `-F 0x0100`, `-t` cores, `sort -T`); index lookup via `find` over `config.bwa_index`, same as upstream; gated on `aligner='bwa'` |
 | STAR_GENOMEGENERATE (local) | `star_genomegenerate` | star 2.6.1d | gated (`aligner='star' && make_star_index`); identical command (`--genomeSAindexNbases` awk over the `.fai`); index written to `results/star/index/` |
 | STAR_ALIGN (local) | `star_align` | star 2.6.1d | gated (`aligner='star'`); identical command (defaults + `--outSAMtype BAM Unsorted`, RG line with ID/SM + conditional CN); `Aligned.out.bam` renamed to `.Lb.bam` so the shared downstream chain is reused; logs published to `results/bwa/library/log/` for MultiQC auto-discovery |
+| BOWTIE2_ALIGN | `bowtie2_align` | bowtie2 2.5.2, samtools 1.18 | gated (`aligner='bowtie2'`); identical command (`find`-located index with `.bt2l` fallback, paired-end `-1/-2`, `--threads`, RG flags `--rg-id/--rg` with `SM` minus `_T\d+` + conditional `CN`, `sort_bam=false`/`save_unaligned=false` so `samtools view` emits the BAM directly); stderr teed to `{pair_id}.Lb.bowtie2.log`, published under `results/bwa/library/log/` for MultiQC auto-discovery (upstream drops the log — no MultiQC bowtie2 section there) |
+| CHROMAP_CHROMAP | `chromap_align` | chromap 0.2.6, samtools 1.20 | gated (`aligner='chromap'`); identical command (`-l 2000 --low-mem --SAM -t -x -r -1/-2`, then `samtools addreplacerg -r '@RG...'` + `samtools view -bh`); barcodes/whitelist/chr-order inputs are empty upstream (`[]`), so no such flags |
 | BAM_SORT_STATS_SAMTOOLS (library, SAMTOOLS_SORT + SAMTOOLS_INDEX + BAM_STATS_SAMTOOLS) | `sort_align` + `index_align` + `stats_align`/`flagstat_align`/`idxstats_align` | samtools 1.17 | identical commands (`samtools cat \| samtools sort` pipeline, `samtools index -@`, stats/flagstat/idxstats) |
 | PICARD_MERGESAMFILES_LIBRARY | `mergesamfiles` | picard 3.2.0 | upstream symlink branch for single-library samples replicated exactly (`ln -s`); the multi-library MergeSamFiles branch is off the default path |
 | BAM_MARKDUPLICATES_PICARD (PICARD_MARKDUPLICATES + SAMTOOLS_INDEX + BAM_STATS_SAMTOOLS) | `markduplicates` + `index_markdup` + `stats_markdup`/`flagstat_markdup`/`idxstats_markdup` | picard 3.2.0, samtools 1.17 | identical (`--ASSUME_SORTED true --REMOVE_DUPLICATES false --VALIDATION_STRINGENCY LENIENT --TMP_DIR tmp`, `XMX = memory*1024*8/10` heap) |
@@ -143,12 +151,11 @@ ported are listed with reasons.
 | MACS2_CALLPEAK / FRIP_SCORE / MULTIQC_CUSTOM_PEAKS / HOMER_ANNOTATEPEAKS / PLOT_MACS3_QC / PLOT_HOMER_ANNOTATEPEAKS / MACS3_CONSENSUS / HOMER_ANNOTATEPEAKS (consensus) / ANNOTATE_BOOLEAN_PEAKS / SUBREAD_FEATURECOUNTS / DESEQ2_QC / IGV / MULTIQC — narrow_peak mode | `*_narrow` rules (13) | same tools | identical commands with the upstream narrow_peak layout: MACS3 without `--broad/--broad-cutoff` (plus `*_summits.bed`), `narrowPeak` suffixes everywhere, `narrow_peak/` dirs (macs3, consensus, igv, multiqc), consensus merge of columns 2-10 (`collapse` x9) and `--is_narrow_peak`; all gated on `narrow_peak=true` |
 | GTF2BED | `gtf2bed` | perl 5.26.2 | gated (`make_gene_bed`); runs the upstream `bin/gtf2bed` script verbatim; output fixed at `results/genome/gene.bed` (upstream names it after the GTF basename) |
 | GENOME_BLACKLIST_REGIONS | `blacklist_regions` | bedtools 2.30.0 | gated (`make_blacklist_regions`); identical `sortBed \| complementBed` pipeline producing `chrom.sizes.include_regions.bed` |
-| prepare_genome (gunzip/untar, custom getchromsizes, BWA/Bowtie2/Chromap index builders) / samplesheet_check | — | — | **not ported** — Nextflow plumbing / reference derivation; the port takes pre-built references (or builds gene.bed / include-regions / STAR index with the gated rules above) |
+| prepare_genome (gunzip/untar, custom getchromsizes, from-scratch BWA/Bowtie2/Chromap index builders) / samplesheet_check | — | — | **not ported** — Nextflow plumbing / reference derivation; the port takes pre-built references and pre-built BWA/Bowtie2/Chromap/STAR indexes (or builds gene.bed / include-regions / STAR index with the gated rules above) |
 | UMI handling (UMITOOLS_EXTRACT, umi_extract) | — | — | **not ported** — `with_umi=false` is hardcoded in chipseq.nf at 2.1.0 (dead branch; the parameter does not exist) |
 | save_align_intermeds / save_mapped / save_tracks outputs | — | — | intermediate BAM/bedGraph publish branches are `false` by default upstream; the port always behaves as `save_align_intermeds=true`; `save_macs_pileup` IS ported (conditional pileup publication in both macs3 rules) |
 | DUMP_SOFTWARE_VERSIONS / pipeline summary + software versions sections of MultiQC | — | — | **not ported** — Nextflow metadata plumbing (paramsSummaryMap/softwareVersionsToYAML); `multiqc_data/` and `multiqc_plots/` ARE published |
 | Multi-antibody consensus (`consensus_cluster` grouping) | — | — | single antibody (`config.antibody`) per run; upstream multi-antibody grouping is out of scope |
-| Bowtie2 / Chromap aligner alternatives | — | — | **not ported** — only the BWA (default) and STAR branches are ported |
 
 ### Known divergences
 
@@ -166,13 +173,17 @@ ported are listed with reasons.
 - **MultiQC config**: `path_filters` and `report_section_order` were adapted
   to the port's `results/` layout and the single-antibody assumption;
   module order and custom-content sections are otherwise identical.
-- **STAR output tree**: STAR alignment results stay under `results/bwa/`
-  (bwa_mem/star_align both produce `{pair_id}.Lb.bam`, so the whole downstream
-  chain is shared). Upstream also routes STAR BAMs through the same
-  `results/bwa/` subworkflows — the difference is only that upstream STAR
-  alignment writes `{id}.Aligned.out.bam`; the port renames it to `.Lb.bam`.
-  STAR logs are published to `results/bwa/library/log/` (upstream feeds them
-  to MultiQC only, from the workdir).
+- **Aligner output tree**: every aligner's results stay under `results/bwa/`
+  (bwa_mem/star_align/bowtie2_align/chromap_align all produce
+  `results/bwa/library/{pair_id}.Lb.bam`, so the whole downstream chain is
+  shared — upstream writes `results/{aligner}/library/` instead). Upstream
+  also routes STAR BAMs through the same `results/bwa/` subworkflows — the
+  difference is only that upstream STAR alignment writes
+  `{id}.Aligned.out.bam`; the port renames it to `.Lb.bam`. STAR logs are
+  published to `results/bwa/library/log/` (upstream feeds them to MultiQC
+  only, from the workdir); the bowtie2 log (`{pair_id}.Lb.bowtie2.log`) is
+  published to the same directory for MultiQC auto-discovery (upstream does
+  not feed it to MultiQC at all).
 - **STAR index generation**: `star_genomegenerate` computes
   `--genomeSAindexNbases` from the provided `.fai` (upstream re-derives the
   index with `samtools faidx` inside its workdir); this port consumes the

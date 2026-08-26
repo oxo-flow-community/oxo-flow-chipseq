@@ -1,15 +1,19 @@
 # Alignment — ports nf-core/chipseq FASTQ_ALIGN_BWA + BAM_SORT_STATS_SAMTOOLS,
 # BAM_MERGE_SAMFILES_PICARD and BAM_MARKDUPLICATES_PICARD subworkflows, plus
-# the ALIGN_STAR branch (STAR_ALIGN local module). Exactly one aligner branch
-# is active per run (config.aligner, default 'bwa'): bwa_mem vs star_align
-# both produce results/bwa/library/{pair_id}.Lb.bam, so every downstream rule
-# is shared. The port always behaves as save_align_intermeds=true
-# (intermediate BAMs are kept under results/bwa/library/).
+# the ALIGN_STAR branch (STAR_ALIGN local module) and the FASTQ_ALIGN_BOWTIE2 /
+# FASTQ_ALIGN_CHROMAP branches (BOWTIE2_ALIGN / CHROMAP_CHROMAP nf-core
+# modules). Exactly one aligner branch is active per run (config.aligner,
+# default 'bwa'): bwa_mem vs star_align vs bowtie2_align vs chromap_align all
+# produce results/bwa/library/{pair_id}.Lb.bam, so every downstream rule is
+# shared (upstream writes results/{aligner}/library — this port keeps the
+# shared results/bwa/ tree, like the STAR branch). The port always behaves as
+# save_align_intermeds=true (intermediate BAMs are kept under
+# results/bwa/library/).
 
 [workflow]
 name = "chipseq-alignment"
 version = "2.1.0"
-description = "BWA-MEM alignment, library merge, MarkDuplicates and samtools QC"
+description = "BWA-MEM/Bowtie2/Chromap/STAR alignment, library merge, MarkDuplicates and samtools QC"
 
 [[rules]]
 name = "bwa_mem"
@@ -73,7 +77,7 @@ STAR --genomeDir {config.star_index} --readFilesIn {input[0]} {input[1]} --runTh
 # shared with the BWA branch. The logs are published for MultiQC, which
 # auto-discovers *Log.final.out in the results/ scan (upstream feeds them
 # to MultiQC directly).
-mv {pair_id}.Aligned.out.bam {pair_id}.Lb.bam
+mv {pair_id}.Aligned.out.bam {output[0]}
 mv {pair_id}.Log.final.out {pair_id}.Log.out {pair_id}.Log.progress.out {pair_id}.SJ.out.tab results/bwa/library/log/
 """
 when = "config.aligner == 'star'"
@@ -85,6 +89,88 @@ memory = "72G"
 
 [rules.environment]
 docker = "quay.io/biocontainers/star:2.6.1d--0"
+
+[[rules]]
+name = "bowtie2_align"
+description = "Bowtie2 read alignment (nf-core/bowtie2/align)"
+input = [
+    "results/trimgalore/{pair_id}_1_val_1.fq.gz",
+    "results/trimgalore/{pair_id}_2_val_2.fq.gz",
+    "{config.bowtie2_index}",
+    "{config.fasta}",
+]
+output = [
+    "results/bwa/library/{pair_id}.Lb.bam",
+    "results/bwa/library/log/{pair_id}.Lb.bowtie2.log",
+]
+shell = """
+set -euo pipefail
+# Faithful port of the 2.1.0 BOWTIE2_ALIGN module with the chipseq
+# ext.args/prefix: sort_bam=false and save_unaligned=false (upstream
+# defaults), so samtools view emits the BAM directly and no --un-conc-gz
+# unmapped output is produced. The index is located by `find` over the
+# staged bowtie2 index directory, with the .bt2l fallback for large
+# genomes, exactly as upstream.
+INDEX=`find -L ./ -name "*.rev.1.bt2" | sed 's/\\.rev.1.bt2$//'`
+[ -z "$INDEX" ] && INDEX=`find -L ./ -name "*.rev.1.bt2l" | sed 's/\\.rev.1.bt2l$//'`
+[ -z "$INDEX" ] && echo "Bowtie2 index files not found" 1>&2 && exit 1
+# Read-group flags from the upstream input_check.nf meta.read_group
+# (conf/modules.config BOWTIE2_ALIGN ext.args): SM drops a trailing
+# _T<digits> library suffix; CN only when seq_center is set.
+SM_ID=`echo {pair_id} | sed 's/_T[0-9][0-9]*$//'`
+BOWTIE2_ARGS="--rg-id {pair_id} --rg SM:$SM_ID --rg PL:ILLUMINA --rg LB:{pair_id} --rg PU:1"
+[ -n "{config.seq_center}" ] && BOWTIE2_ARGS="$BOWTIE2_ARGS --rg CN:{config.seq_center}"
+mkdir -p results/bwa/library/log
+# stderr is teed into the bowtie2 log (MultiQC's *.bowtie2.log) like
+# upstream; the port keeps logs under results/bwa/library/log/ so the
+# MultiQC run-root scan finds them (upstream drops the log entirely).
+bowtie2 -x $INDEX -1 {input[0]} -2 {input[1]} --threads {effective_threads} $BOWTIE2_ARGS 2> >(tee {output[1]} >&2) | samtools view --threads {effective_threads} -o {output[0]} -
+"""
+when = "config.aligner == 'bowtie2'"
+
+[rules.resources]
+threads = 12
+memory = "72G"
+
+[rules.environment]
+docker = "quay.io/biocontainers/mulled-v2-ac74a7f02cebcfcc07d8e8d1d750af9c83b4d45a:f70b31a2db15c023d641c32f433fb02cd04df5a6-0"
+
+[[rules]]
+name = "chromap_align"
+description = "Chromap read alignment (nf-core/chromap/chromap)"
+input = [
+    "results/trimgalore/{pair_id}_1_val_1.fq.gz",
+    "results/trimgalore/{pair_id}_2_val_2.fq.gz",
+    "{config.chromap_index}",
+    "{config.fasta}",
+]
+output = ["results/bwa/library/{pair_id}.Lb.bam"]
+shell = """
+set -euo pipefail
+# Faithful port of the 2.1.0 CHROMAP_CHROMAP module with the chipseq
+# ext.args ('-l 2000 --low-mem --SAM') and ext.prefix ('{meta.id}.Lb'):
+# chromap emits SAM, then samtools addreplacerg tags the read-group line
+# (input_check.nf meta.read_group, SM with the _T<digits> suffix dropped,
+# CN only when seq_center is set) and samtools view converts to BAM.
+# barcodes/whitelist/chr-order inputs are empty upstream ([]), so no
+# -b/--barcode-whitelist/--chr-order flags appear.
+mkdir -p results/bwa/library
+SM_ID=`echo {pair_id} | sed 's/_T[0-9][0-9]*$//'`
+RG="@RG\\tID:{pair_id}\\tSM:$SM_ID\\tPL:ILLUMINA\\tLB:{pair_id}\\tPU:1"
+[ -n "{config.seq_center}" ] && RG="@RG\\tID:{pair_id}\\tSM:$SM_ID\\tPL:ILLUMINA\\tLB:{pair_id}\\tPU:1\\tCN:{config.seq_center}"
+chromap -l 2000 --low-mem --SAM -t {effective_threads} -x {config.chromap_index} -r {config.fasta} -1 {input[0]} -2 {input[1]} -o {pair_id}.Lb.sam
+samtools addreplacerg -r "$RG" -o {pair_id}.Lb.rg.sam {pair_id}.Lb.sam
+samtools view -@ {effective_threads} -bh -o {output[0]} {pair_id}.Lb.rg.sam
+rm {pair_id}.Lb.rg.sam {pair_id}.Lb.sam
+"""
+when = "config.aligner == 'chromap'"
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "quay.io/biocontainers/mulled-v2-1f09f39f20b1c4ee36581dc81cc323c70e661633:6500f0fa0c9536821177168555632d9811670937-0"
 
 [[rules]]
 name = "sort_align"
