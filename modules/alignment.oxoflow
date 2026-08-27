@@ -29,7 +29,12 @@ when = "config.aligner == 'bwa'"
 depends_on = ["reference::bwa_index_build"]
 shell = """
 set -euo pipefail
-INDEX=`find -L ./ -name "*.amb" | sed 's/\\.amb$//'`
+# Resolve the index prefix INSIDE the configured index directory: a
+# tree-wide `find -name "*.amb"` breaks when the fixture index and a
+# freshly built one coexist (two prefixes land in $INDEX -> bwa prints
+# usage). Live-caught on tx-ubuntu 2026-08-27 (make_bwa_index=true).
+INDEX=`find -L "{config.bwa_index}" -maxdepth 1 -name "*.amb" 2>/dev/null | head -1 | sed 's/\\.amb$//'`
+[ -n "$INDEX" ] || { echo "[chipseq] no bwa index (.amb) found under {config.bwa_index}" >&2; exit 1; }
 RG="@RG\\tID:{pair_id}\\tSM:{pair_id}\\tPL:ILLUMINA\\tLB:{pair_id}\\tPU:1"
 [ -n "{config.seq_center}" ] && RG="$RG\\tCN:{config.seq_center}"
 BWA_ARGS="-M"
@@ -111,9 +116,11 @@ set -euo pipefail
 # defaults), so samtools view emits the BAM directly and no --un-conc-gz
 # unmapped output is produced. The index is located by `find` over the
 # staged bowtie2 index directory, with the .bt2l fallback for large
-# genomes, exactly as upstream.
-INDEX=`find -L ./ -name "*.rev.1.bt2" | sed 's/\\.rev.1.bt2$//'`
-[ -z "$INDEX" ] && INDEX=`find -L ./ -name "*.rev.1.bt2l" | sed 's/\\.rev.1.bt2l$//'`
+# genomes, exactly as upstream — scoped to {config.bowtie2_index} so a
+# coexisting fixture + freshly built index cannot yield two prefixes
+# (same failure class as the bwa rule, live-caught 2026-08-27).
+INDEX=`find -L "{config.bowtie2_index}" -maxdepth 1 -name "*.rev.1.bt2" 2>/dev/null | head -1 | sed 's/\\.rev.1.bt2$//'`
+[ -z "$INDEX" ] && INDEX=`find -L "{config.bowtie2_index}" -maxdepth 1 -name "*.rev.1.bt2l" 2>/dev/null | head -1 | sed 's/\\.rev.1.bt2l$//'`
 [ -z "$INDEX" ] && echo "Bowtie2 index files not found" 1>&2 && exit 1
 # Read-group flags from the upstream input_check.nf meta.read_group
 # (conf/modules.config BOWTIE2_ALIGN ext.args): SM drops a trailing
