@@ -103,10 +103,28 @@ if (!opt$vst) {
     rld      <- rlog(dds)
 } else {
     vst_name <- "vst"
-    rld      <- varianceStabilizingTransformation(dds)
+    # VST fits a dispersion curve, which collapses on low-variance data
+    # (DESeq2: "all gene-wise dispersion estimates are within 2 orders of
+    # magnitude from the minimum value" — common on synthetic fixtures and
+    # heavily filtered count tables). Fall back to log2-normalized counts
+    # so the PCA/clustering QC still renders: every output the rule
+    # declares (tables, plots pdf, dds.RData) must be produced.
+    rld <- tryCatch(
+        varianceStabilizingTransformation(dds),
+        error = function(e) {
+            warning("VST failed on low-variance data (", conditionMessage(e),
+                    "); using log2(normalized counts + 1) for PCA/clustering",
+                    call. = FALSE)
+            log2(counts(dds, normalized = TRUE) + 1)
+        }
+    )
 }
 
-assay(dds, vst_name) <- assay(rld)
+if (is.matrix(rld)) {
+    assay(dds, vst_name) <- rld
+} else {
+    assay(dds, vst_name) <- assay(rld)
+}
 save(dds,file=DDSFile)
 saveRDS(dds, file=sub("\\.dds\\.RData$", ".rds", DDSFile))
 
@@ -194,12 +212,22 @@ write.table(pca.vals, file = paste(opt$outprefix, ".pca.vals.txt", sep=""),
 sampleDists      <- dist(t(assay(dds, vst_name)))
 sampleDistMatrix <- as.matrix(sampleDists)
 colors           <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
-pheatmap(
-    sampleDistMatrix,
-    clustering_distance_rows=sampleDists,
-    clustering_distance_cols=sampleDists,
-    col=colors,
-    main=paste("Euclidean distance between", vst_name, "of samples")
+# pheatmap dies with "'breaks' are not unique" (via scale_vec_colours -> cut)
+# when every distance is identical — the degenerate low-variance case that
+# the VST fallback above already handles. The PCA pages are already drawn;
+# skip the heatmap page rather than abort the whole PDF.
+tryCatch(
+    pheatmap(
+        sampleDistMatrix,
+        clustering_distance_rows=sampleDists,
+        clustering_distance_cols=sampleDists,
+        col=colors,
+        main=paste("Euclidean distance between", vst_name, "of samples")
+    ),
+    error = function(e) {
+        warning("Sample-distance heatmap failed on degenerate (low-variance) data (",
+                conditionMessage(e), "); skipping heatmap page", call. = FALSE)
+    }
 )
 
 ## WRITE SAMPLE DISTANCES TO FILE

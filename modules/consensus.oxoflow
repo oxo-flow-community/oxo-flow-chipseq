@@ -44,7 +44,10 @@ Rscript scripts/plot_peak_intersect.r -i $CONS/{config.antibody}.consensus_peaks
 printf "%s\\t%s\\n" "{config.antibody}.consensus_peaks.bed" "$CONS/{config.antibody}.consensus_peaks.bed" > $CONS/{config.antibody}.consensus_peaks.antibody.txt
 """
 when = "!config.multi_antibody && !config.narrow_peak && !config.skip_consensus_peaks && (config.multiple_groups || config.replicates_exist)"
-depends_on = ["peaks::macs3_callpeak"]
+# No depends_on: the ip_ids-scoped expand_inputs below already edges to the IP callpeak
+# instances. A rule-level depends_on would also edge to the control samples, whose
+# callpeak instances skip (optional, empty {control}) and then block this rule — and,
+# via skipped-no-output propagation, the whole consensus/quantification/report tail.
 expand_inputs = [
     { pattern = "results/bwa/merged_library/macs3/broad_peak/{pair_id}_peaks.broadPeak", variables = { pair_id = "config.ip_ids" } },
 ]
@@ -85,7 +88,7 @@ Rscript scripts/plot_peak_intersect.r -i $CONS/{config.antibody}.consensus_peaks
 printf "%s\\t%s\\n" "{config.antibody}.consensus_peaks.bed" "$CONS/{config.antibody}.consensus_peaks.bed" > $CONS/{config.antibody}.consensus_peaks.antibody.txt
 """
 when = "!config.multi_antibody && config.narrow_peak && !config.skip_consensus_peaks && (config.multiple_groups || config.replicates_exist)"
-depends_on = ["peaks::macs3_callpeak_narrow"]
+# No depends_on (see macs3_consensus): expand_inputs edges to the IP narrow-callpeak instances.
 expand_inputs = [
     { pattern = "results/bwa/merged_library/macs3/narrow_peak/{pair_id}_peaks.narrowPeak", variables = { pair_id = "config.ip_ids" } },
 ]

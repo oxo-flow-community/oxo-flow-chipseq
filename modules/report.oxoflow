@@ -40,7 +40,10 @@ python3 scripts/igv_files_to_session.py igv_session.xml igv_files_orig.txt repla
 mv igv_session.xml igv_files_orig.txt results/igv/broad_peak/
 """
 when = "!config.multi_antibody && !config.narrow_peak && !config.skip_igv"
-depends_on = ["tracks::ucsc_bedgraphtobigwig", "peaks::macs3_callpeak", "consensus::macs3_consensus"]
+# depends_on intentionally excludes peaks::macs3_callpeak: rule-level edges would reach the
+# control callpeak instances, which skip (optional, empty {control}) and would block this rule.
+# Peak readiness comes through consensus::macs3_consensus (its outputs are file inputs above).
+depends_on = ["tracks::ucsc_bedgraphtobigwig", "consensus::macs3_consensus"]
 expand_inputs = [
     { pattern = "results/bwa/merged_library/bigwig/{pair_id}.mLb.clN.bigWig", variables = { pair_id = "config.pair_ids" } },
     { pattern = "results/bwa/merged_library/macs3/broad_peak/{pair_id}_peaks.broadPeak", variables = { pair_id = "config.ip_ids" } },
@@ -82,7 +85,8 @@ python3 scripts/igv_files_to_session.py igv_session.xml igv_files_orig.txt repla
 mv igv_session.xml igv_files_orig.txt results/igv/narrow_peak/
 """
 when = "!config.multi_antibody && config.narrow_peak && !config.skip_igv"
-depends_on = ["tracks::ucsc_bedgraphtobigwig", "peaks::macs3_callpeak_narrow", "consensus::macs3_consensus_narrow"]
+# No peaks::macs3_callpeak_narrow dependency (see igv).
+depends_on = ["tracks::ucsc_bedgraphtobigwig", "consensus::macs3_consensus_narrow"]
 expand_inputs = [
     { pattern = "results/bwa/merged_library/bigwig/{pair_id}.mLb.clN.bigWig", variables = { pair_id = "config.pair_ids" } },
     { pattern = "results/bwa/merged_library/macs3/narrow_peak/{pair_id}_peaks.narrowPeak", variables = { pair_id = "config.ip_ids" } },
@@ -136,9 +140,9 @@ depends_on = [
     "filter::phantompeakqualtools",
     "filter::multiqc_custom_phantompeakqualtools",
     "tracks::deeptools_plotprofile",
-    "tracks::deeptools_plotfingerprint",
-    "peaks::multiqc_custom_peaks",
-    "peaks::plot_homer_annotatepeaks",
+    # The plotFingerprint/MQC expand_inputs below already edge to the IP instances; rule-level
+    # entries for deeptools_plotfingerprint / multiqc_custom_peaks would reach the control
+    # instances, which skip (optional, empty {control}) and would block the whole report.
     "consensus::subread_featurecounts",
     "consensus::deseq2_qc",
 ]
@@ -216,9 +220,8 @@ depends_on = [
     "filter::phantompeakqualtools",
     "filter::multiqc_custom_phantompeakqualtools",
     "tracks::deeptools_plotprofile",
-    "tracks::deeptools_plotfingerprint",
-    "peaks::multiqc_custom_peaks_narrow",
-    "peaks::plot_homer_annotatepeaks_narrow",
+    # See multiqc: rule-level entries for the optional per-sample QC rules are dropped in
+    # favour of the precise ip_ids-scoped expand_inputs below.
     "consensus::subread_featurecounts_narrow",
     "consensus::deseq2_qc_narrow",
 ]
