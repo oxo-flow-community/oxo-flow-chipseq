@@ -42,26 +42,32 @@ git clone https://github.com/oxo-flow-community/oxo-flow-chipseq.git
 **Reference data you must provide** — set under `[config]` in `main.oxoflow`
 (paths are relative to the run directory):
 
-- genome FASTA and its FASTA index (`fasta`, `fai`)
+- genome FASTA (`fasta`; the FASTA index `fai` is only needed for
+  `make_star_index`)
 - annotation GTF (`gtf`)
 - gene-body regions in BED format (`gene_bed` — upstream derives this from
   the GTF; this port takes it pre-built, or generates it with
   `make_gene_bed = true`)
-- chromosome sizes file (`chrom_sizes`)
+- chromosome sizes file (`chrom_sizes`, or derive it from the FASTA with
+  `make_chrom_sizes = true`)
 - blacklist regions in BED format (`blacklist`)
-- BWA index directory (`bwa_index`) containing the BWA index files (`*.amb`,
-  `*.ann`, `*.bwt`, `*.pac`, `*.sa`) for the reference FASTA — for
-  `aligner = "bowtie2"` a Bowtie2 index directory (`bowtie2_index`), for
-  `aligner = "chromap"` a Chromap index file (`chromap_index`, upstream
-  default `genome.index`), and for `aligner = "star"` a STAR index directory
-  (`star_index`), or build one with `make_star_index = true` (then set
-  `star_index = "results/star/index"`)
+- aligner index — for the default `aligner = "bwa"` a BWA index directory
+  (`bwa_index`) containing the BWA index files (`*.amb`, `*.ann`, `*.bwt`,
+  `*.pac`, `*.sa`) for the reference FASTA; for `aligner = "bowtie2"` a
+  Bowtie2 index directory (`bowtie2_index`), for `aligner = "chromap"` a
+  Chromap index file (`chromap_index`, upstream default `genome.index`), and
+  for `aligner = "star"` a STAR index directory (`star_index`). Each index
+  can be built from the FASTA with the matching gated rule
+  (`make_bwa_index` / `make_bowtie2_index` / `make_chromap_index` /
+  `make_star_index`), then point the config key at the generated
+  `results/...` path
 - raw paired-end FASTQ reads (`raw_dir`, named `raw/{pair_id}_R{1,2}.fastq.gz`)
   with sample metadata declared in `[[pairs]]` and `ip_ids`
 
 **Compute** — the largest rules (`bwa_mem`, `bowtie2_align`, `star_align`,
-`trimgalore`, `star_genomegenerate`) request 12 threads and 72 GB of memory;
-most other rules request 6 threads and 36 GB (`chromap_align` included — see
+`trimgalore`, `star_genomegenerate`) request 12 threads and 72 GB of memory,
+`bowtie2_index_build` 12 threads and 36 GB; most other rules request 6
+threads and 36 GB (`chromap_align`, `chromap_index_build` included — see
 `modules/*.oxoflow` `[rules.resources]`). A default single-rule run peaks
 around 72 GB — scale the numbers down for small machines.
 
@@ -73,7 +79,7 @@ biocontainers (or nf-core / Seqera Wave) image and the workflow runs with the
 
 ```bash
 oxo-flow validate main.oxoflow
-oxo-flow dry-run main.oxoflow       # prints the 194-instance plan (153 run, 41 gated off)
+oxo-flow dry-run main.oxoflow       # prints the 198-instance plan (153 run, 45 gated off)
 oxo-flow run main.oxoflow           # executes locally (docker backend)
 oxo-flow debug main.oxoflow         # show expanded commands
 ```
@@ -89,6 +95,10 @@ unchanged when all are off):
 | `narrow_peak = true` | whole peak chain in narrowPeak mode (MACS3 args, `narrow_peak/` dirs, consensus merge columns, IGV/MultiQC outputs) |
 | `make_gene_bed = true` | derive `results/genome/gene.bed` from the GTF (then point `gene_bed` at it) |
 | `make_blacklist_regions = true` | derive `results/genome/chrom.sizes.include_regions.bed` from blacklist + chrom sizes (then point `blacklist` at it) |
+| `make_chrom_sizes = true` | derive `results/genome/chrom.sizes` + `results/genome/genome.fa.fai` from the FASTA (then point `chrom_sizes`/`fai` at them) |
+| `make_bwa_index = true` | build the BWA index into `results/bwa/index` (requires `aligner = "bwa"`; then point `bwa_index` at it) |
+| `make_bowtie2_index = true` | build the Bowtie2 index into `results/bowtie2/index` (requires `aligner = "bowtie2"`; then point `bowtie2_index` at it) |
+| `make_chromap_index = true` | build the Chromap index into `results/chromap/index/genome.index` (requires `aligner = "chromap"`; then point `chromap_index` at it) |
 
 The workflow runs with the **docker** backend (all tools pinned to the
 upstream container images). Replace the `test/fixtures` input paths in
@@ -151,9 +161,13 @@ ported are listed with reasons.
 | MACS2_CALLPEAK / FRIP_SCORE / MULTIQC_CUSTOM_PEAKS / HOMER_ANNOTATEPEAKS / PLOT_MACS3_QC / PLOT_HOMER_ANNOTATEPEAKS / MACS3_CONSENSUS / HOMER_ANNOTATEPEAKS (consensus) / ANNOTATE_BOOLEAN_PEAKS / SUBREAD_FEATURECOUNTS / DESEQ2_QC / IGV / MULTIQC — narrow_peak mode | `*_narrow` rules (13) | same tools | identical commands with the upstream narrow_peak layout: MACS3 without `--broad/--broad-cutoff` (plus `*_summits.bed`), `narrowPeak` suffixes everywhere, `narrow_peak/` dirs (macs3, consensus, igv, multiqc), consensus merge of columns 2-10 (`collapse` x9) and `--is_narrow_peak`; all gated on `narrow_peak=true` |
 | GTF2BED | `gtf2bed` | perl 5.26.2 | gated (`make_gene_bed`); runs the upstream `bin/gtf2bed` script verbatim; output fixed at `results/genome/gene.bed` (upstream names it after the GTF basename) |
 | GENOME_BLACKLIST_REGIONS | `blacklist_regions` | bedtools 2.30.0 | gated (`make_blacklist_regions`); identical `sortBed \| complementBed` pipeline producing `chrom.sizes.include_regions.bed` |
-| prepare_genome (gunzip/untar, custom getchromsizes, from-scratch BWA/Bowtie2/Chromap index builders) / samplesheet_check | — | — | **not ported** — Nextflow plumbing / reference derivation; the port takes pre-built references and pre-built BWA/Bowtie2/Chromap/STAR indexes (or builds gene.bed / include-regions / STAR index with the gated rules above) |
+| CUSTOM_GETCHROMSIZES | `getchromsizes` | samtools 1.20 | gated (`make_chrom_sizes`); identical script (`samtools faidx` + `cut -f 1,2`); the fasta is symlinked into `results/genome/` so the user's reference files are never touched; outputs fixed at `results/genome/chrom.sizes` + `results/genome/genome.fa.fai` (upstream names them `{fasta}.sizes` / `{fasta}.fai`) |
+| BWA_INDEX | `bwa_index_build` | bwa 0.7.18 | gated (`aligner='bwa' && make_bwa_index`); identical command (`bwa index -p {prefix} {fasta}`); prefix fixed at `results/bwa/index/genome` (upstream names the files after the fasta basename — `bwa_mem` locates the index by `find`, so the prefix is transparent) |
+| BOWTIE2_BUILD | `bowtie2_index_build` | bowtie2 2.5.2 | gated (`aligner='bowtie2' && make_bowtie2_index`); identical command (`bowtie2-build --threads`); index base fixed at `results/bowtie2/index/genome` (upstream names the files after the fasta basename — `bowtie2_align` locates the index by `find`, so the base is transparent) |
+| CHROMAP_INDEX | `chromap_index_build` | chromap 0.2.6 | gated (`aligner='chromap' && make_chromap_index`); identical command (`chromap -i -t -r -o`); output fixed at `results/chromap/index/genome.index` (upstream names it `{fasta.baseName}.index`) |
+| prepare_genome (gunzip/untar, GFFREAD) / samplesheet_check | — | — | **not ported** — compressed-reference gunzip/untar convenience, GFFREAD (GFF3 -> GTF) and samplesheet validation/staging (the port consumes pre-built plain reference files; the samplesheet analogue is `[[pairs]]`). The reference-derivation steps that make sense on plain files ARE ported as gated rules — getchromsizes and the BWA/Bowtie2/Chromap/STAR index builders (rows above) |
 | UMI handling (UMITOOLS_EXTRACT, umi_extract) | — | — | **not ported** — `with_umi=false` is hardcoded in chipseq.nf at 2.1.0 (dead branch; the parameter does not exist) |
-| save_align_intermeds / save_mapped / save_tracks outputs | — | — | intermediate BAM/bedGraph publish branches are `false` by default upstream; the port always behaves as `save_align_intermeds=true`; `save_macs_pileup` IS ported (conditional pileup publication in both macs3 rules) |
+| save_reference / save_trimmed / save_unaligned outputs | — | — | publish branches that are `false` by default upstream; the port always behaves as `save_align_intermeds=true` (intermediates are kept). Upstream 2.1.0 has no `save_mapped` / `save_tracks` params. `save_macs_pileup` IS ported (conditional pileup publication in both macs3 rules) |
 | DUMP_SOFTWARE_VERSIONS / pipeline summary + software versions sections of MultiQC | — | — | **not ported** — Nextflow metadata plumbing (paramsSummaryMap/softwareVersionsToYAML); `multiqc_data/` and `multiqc_plots/` ARE published |
 | Multi-antibody consensus (`consensus_cluster` grouping) | — | — | single antibody (`config.antibody`) per run; upstream multi-antibody grouping is out of scope |
 
@@ -168,8 +182,26 @@ ported are listed with reasons.
   (`optional = true`).
 - **Reference inputs**: upstream derives references from `--genome`/iGenomes
   (GTF2BED for gene body regions, blacklist check); this port consumes
-  pre-built files (`fasta`, `fai`, `gtf`, `gene_bed`, `chrom_sizes`,
-  `blacklist`, `bwa_index` prefix).
+  pre-built files (`fasta`, `gtf`, `gene_bed`, `chrom_sizes`, `blacklist`,
+  index prefixes). The derivation steps that make sense on plain reference
+  files are ported as gated rules — `make_gene_bed`, `make_blacklist_regions`,
+  `make_chrom_sizes`, `make_bwa_index`, `make_bowtie2_index`,
+  `make_chromap_index`, `make_star_index` (see the Fidelity table).
+- **Fixed output names for derived references**: the gated reference rules
+  write fixed names — `results/genome/gene.bed`,
+  `results/genome/chrom.sizes`, `results/genome/genome.fa.fai`,
+  `results/bwa/index/genome.*`, `results/bowtie2/index/genome.*.bt2`,
+  `results/chromap/index/genome.index`, `results/star/index/` — where
+  upstream names outputs after the FASTA/GTF basename. The consuming rules
+  locate indexes by `find`, so the prefix is transparent; point the config
+  keys at the generated paths when the rules are enabled.
+- **Multi-library merge not ported**: upstream groups libraries by
+  `meta.id` minus `_T\d+` and merges variable-size library sets before
+  markduplicates. The merge itself is expressible in oxo-flow
+  (`expand_inputs` glob over the libraries), but every downstream rule keys
+  on `pair_id`; a second per-sample grouping dimension would restructure the
+  whole pipeline, so only the single-library default path (the upstream
+  symlink shortcut, replicated exactly) is ported.
 - **MultiQC config**: `path_filters` and `report_section_order` were adapted
   to the port's `results/` layout and the single-antibody assumption;
   module order and custom-content sections are otherwise identical.

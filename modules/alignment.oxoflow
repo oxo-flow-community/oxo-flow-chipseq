@@ -26,6 +26,7 @@ input = [
 ]
 output = ["results/bwa/library/{pair_id}.Lb.bam"]
 when = "config.aligner == 'bwa'"
+depends_on = ["reference::bwa_index_build"]
 shell = """
 set -euo pipefail
 INDEX=`find -L ./ -name "*.amb" | sed 's/\\.amb$//'`
@@ -127,6 +128,7 @@ mkdir -p results/bwa/library/log
 bowtie2 -x $INDEX -1 {input[0]} -2 {input[1]} --threads {effective_threads} $BOWTIE2_ARGS 2> >(tee {output[1]} >&2) | samtools view --threads {effective_threads} -o {output[0]} -
 """
 when = "config.aligner == 'bowtie2'"
+depends_on = ["reference::bowtie2_index_build"]
 
 [rules.resources]
 threads = 12
@@ -164,6 +166,7 @@ samtools view -@ {effective_threads} -bh -o {output[0]} {pair_id}.Lb.rg.sam
 rm {pair_id}.Lb.rg.sam {pair_id}.Lb.sam
 """
 when = "config.aligner == 'chromap'"
+depends_on = ["reference::chromap_index_build"]
 
 [rules.resources]
 threads = 6

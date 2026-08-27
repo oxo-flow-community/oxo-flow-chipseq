@@ -54,13 +54,13 @@ three_prime_clip_r1 = 0
 three_prime_clip_r2 = 0
 
 # Alignment / filtering. aligner selects the read aligner: 'bwa' (the nf-core
-# default), 'bowtie2', 'chromap' or 'star'. Bowtie2 mode needs a pre-built
-# Bowtie2 index directory (set bowtie2_index); chromap mode a pre-built
-# Chromap index file (set chromap_index; the from-scratch index builders are
-# not ported — see README). STAR mode needs a STAR index directory (set
-# star_index, e.g. from the upstream iGenomes bundle) or the built-in
-# generator (make_star_index = true builds results/star/index from fasta +
-# gtf — set star_index = "results/star/index" in that case).
+# default), 'bowtie2', 'chromap' or 'star'. Each mode takes a pre-built index
+# (bwa_index directory / bowtie2_index directory / chromap_index file /
+# star_index directory, e.g. from the upstream iGenomes bundle) — or derives
+# it from the reference FASTA with the gated builders below, mirroring the
+# upstream PREPARE_GENOME index branches (make_bwa_index / make_bowtie2_index
+# / make_chromap_index / make_star_index; point the corresponding index
+# config at the generated results/... path in that case).
 aligner = "bwa"
 bowtie2_index = ""
 chromap_index = ""
@@ -86,9 +86,19 @@ multiqc_title = ""
 # Reference preparation — ports of the upstream PREPARE_GENOME steps that can
 # run on the port's plain reference files (all off by default). When enabled,
 # point the corresponding input above at the generated file, e.g.
-# gene_bed = "results/genome/gene.bed" with make_gene_bed = true.
+# gene_bed = "results/genome/gene.bed" with make_gene_bed = true;
+# chrom_sizes = "results/genome/chrom.sizes" and
+# fai = "results/genome/genome.fa.fai" with make_chrom_sizes = true;
+# bwa_index = "results/bwa/index" with make_bwa_index = true;
+# bowtie2_index = "results/bowtie2/index" with make_bowtie2_index = true;
+# chromap_index = "results/chromap/index/genome.index" with
+# make_chromap_index = true.
 make_gene_bed = false
 make_blacklist_regions = false
+make_chrom_sizes = false
+make_bwa_index = false
+make_bowtie2_index = false
+make_chromap_index = false
 
 # Step toggles (mirror the nf-core/chipseq params.skip_* / when gates)
 skip_fastqc = false

@@ -4,18 +4,32 @@
 #   make_gene_bed          -> GTF2BED (derive gene-body BED from the GTF)
 #   make_blacklist_regions -> GENOME_BLACKLIST_REGIONS (complement of the
 #                             blacklist against the chromosome sizes)
+#   make_chrom_sizes       -> CUSTOM_GETCHROMSIZES (derive chrom.sizes and
+#                             the FASTA index from the fasta)
+#   make_bwa_index         -> BWA_INDEX (build the BWA index from the fasta
+#                             into results/bwa/index; requires
+#                             aligner = "bwa" and bwa_index set to the
+#                             results/bwa/index path)
+#   make_bowtie2_index     -> BOWTIE2_BUILD (build the Bowtie2 index from
+#                             the fasta into results/bowtie2/index; requires
+#                             aligner = "bowtie2" and bowtie2_index set to
+#                             the results/bowtie2/index path)
+#   make_chromap_index     -> CHROMAP_INDEX (build the Chromap index from
+#                             the fasta; requires aligner = "chromap" and
+#                             chromap_index set to the results/chromap/index/
+#                             genome.index path)
 #   make_star_index        -> STAR_GENOMEGENERATE (build the STAR index from
 #                             fasta + gtf into results/star/index; requires
 #                             aligner = "star" and star_index set to the
 #                             results/star/index path)
-# The upstream gunzip/untar plumbing (compressed-reference handling), the
-# custom getchromsizes and the from-scratch BWA/Bowtie2/Chromap index builders
-# are not ported — this port consumes pre-built plain files (see README).
+# The upstream gunzip/untar plumbing (compressed-reference handling) and
+# GFFREAD (GFF3 -> GTF) are not ported — this port consumes pre-built plain
+# files (see README).
 
 [workflow]
 name = "chipseq-reference"
 version = "2.1.0"
-description = "Reference preparation: gene BED, blacklist complement and STAR index generation"
+description = "Reference preparation: gene BED, blacklist complement, chrom sizes and aligner index generation"
 
 [[rules]]
 name = "gtf2bed"
@@ -80,3 +94,122 @@ memory = "72G"
 
 [rules.environment]
 docker = "quay.io/biocontainers/mulled-v2-1fa26d1ce03c295fe2fdcf85831a92fbcbd7e8c2:59cdd445419f14abac76b31dd0d71217994cbcc9-0"
+
+[[rules]]
+name = "getchromsizes"
+description = "Derive chromosome sizes and the FASTA index from the reference FASTA (nf-core/custom/getchromsizes)"
+input = ["{config.fasta}"]
+output = [
+    "results/genome/chrom.sizes",
+    "results/genome/genome.fa.fai",
+]
+shell = """
+set -euo pipefail
+mkdir -p results/genome
+# Faithful port of the 2.1.0 CUSTOM_GETCHROMSIZES script
+# (`samtools faidx` + `cut -f 1,2`). The fasta is symlinked into
+# results/genome so faidx writes the .fai next to the symlink in the run
+# tree instead of touching the user's reference files (upstream runs in
+# its own workdir; this port runs in the shared run directory). Upstream
+# names the outputs {fasta}.sizes / {fasta}.fai — this port uses fixed
+# names under results/genome/: point config.chrom_sizes and config.fai at
+# the generated files when make_chrom_sizes = true.
+ln -s "$PWD/{config.fasta}" results/genome/genome.fa
+samtools faidx results/genome/genome.fa
+cut -f 1,2 results/genome/genome.fa.fai > results/genome/chrom.sizes
+rm results/genome/genome.fa
+"""
+when = "config.make_chrom_sizes"
+
+[rules.resources]
+threads = 1
+memory = "6G"
+
+[rules.environment]
+docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
+
+[[rules]]
+name = "bwa_index_build"
+description = "Build BWA index from the reference FASTA (nf-core/bwa/index)"
+input = ["{config.fasta}"]
+output = [
+    "results/bwa/index/genome.amb",
+    "results/bwa/index/genome.ann",
+    "results/bwa/index/genome.bwt",
+    "results/bwa/index/genome.pac",
+    "results/bwa/index/genome.sa",
+]
+shell = """
+set -euo pipefail
+mkdir -p results/bwa/index
+# Faithful port of the 2.1.0 BWA_INDEX module (no ext.args upstream):
+# `bwa index -p {prefix} {fasta}`. The prefix is fixed at "genome"
+# (upstream names the files after the fasta basename) — bwa_mem locates
+# the index by `find -name "*.amb"`, so the prefix is transparent. Set
+# config.bwa_index to results/bwa/index when make_bwa_index = true.
+bwa index -p results/bwa/index/genome {config.fasta}
+"""
+when = "config.aligner == 'bwa' && config.make_bwa_index"
+
+[rules.resources]
+threads = 1
+memory = "6G"
+
+[rules.environment]
+docker = "quay.io/biocontainers/bwa:0.7.18--he4a0461_0"
+
+[[rules]]
+name = "bowtie2_index_build"
+description = "Build Bowtie2 index from the reference FASTA (nf-core/bowtie2/build)"
+input = ["{config.fasta}"]
+output = [
+    "results/bowtie2/index/genome.1.bt2",
+    "results/bowtie2/index/genome.2.bt2",
+    "results/bowtie2/index/genome.3.bt2",
+    "results/bowtie2/index/genome.4.bt2",
+    "results/bowtie2/index/genome.rev.1.bt2",
+    "results/bowtie2/index/genome.rev.2.bt2",
+]
+shell = """
+set -euo pipefail
+mkdir -p results/bowtie2/index
+# Faithful port of the 2.1.0 BOWTIE2_BUILD module (no ext.args upstream):
+# `bowtie2-build --threads $task.cpus {fasta} {prefix}`. The index base is
+# fixed at "genome" (upstream names the files after the fasta basename) —
+# bowtie2_align locates the index by `find -name "*.rev.1.bt2"`, so the
+# base is transparent. Set config.bowtie2_index to results/bowtie2/index
+# when make_bowtie2_index = true.
+bowtie2-build --threads {threads} {config.fasta} results/bowtie2/index/genome
+"""
+when = "config.aligner == 'bowtie2' && config.make_bowtie2_index"
+
+[rules.resources]
+threads = 12
+memory = "36G"
+
+[rules.environment]
+docker = "quay.io/biocontainers/bowtie2:2.5.2--py39h6fed5c7_0"
+
+[[rules]]
+name = "chromap_index_build"
+description = "Build Chromap index from the reference FASTA (nf-core/chromap/index)"
+input = ["{config.fasta}"]
+output = ["results/chromap/index/genome.index"]
+shell = """
+set -euo pipefail
+mkdir -p results/chromap/index
+# Faithful port of the 2.1.0 CHROMAP_INDEX module (no ext.args upstream):
+# `chromap -i -t $task.cpus -r {fasta} -o {prefix}.index`. The index name
+# is fixed at "genome.index" (upstream uses the fasta basename). Set
+# config.chromap_index to results/chromap/index/genome.index when
+# make_chromap_index = true.
+chromap -i -t {threads} -r {config.fasta} -o results/chromap/index/genome.index
+"""
+when = "config.aligner == 'chromap' && config.make_chromap_index"
+
+[rules.resources]
+threads = 6
+memory = "36G"
+
+[rules.environment]
+docker = "quay.io/biocontainers/chromap:0.2.6--hdcf5f25_0"
