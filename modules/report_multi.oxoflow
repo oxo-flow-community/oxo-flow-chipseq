@@ -1,23 +1,24 @@
-# Reporting — ports nf-core/chipseq local IGV and MULTIQC modules.
-# MultiQC scans the whole results/ tree from the workflow root; the expand_inputs
-# list below only wires ordering edges to every MQC-producing rule (the shell does
-# not reference {input}). assets/multiqc_config.yml is copied to the run root where
-# MultiQC auto-discovers it, mirroring the upstream workdir layout. In narrow_peak
-# mode the *_narrow variants below take over (results/igv/narrow_peak and
-# results/multiqc/narrow_peak, matching the upstream narrow_peak output layout).
+# Reporting — multi-antibody mode.
+#
+# Mirror of modules/report.oxoflow for config.multi_antibody = true. Both
+# shells are discovery-based (find over results/ for IGV, a MultiQC scan of
+# the whole tree), so they pick up every antibody's consensus/DESeq2 files
+# automatically; the per-antibody inputs the single-antibody rules declare
+# are replaced by depends_on edges to the GROUPED consensus rules
+# (consensus::*_multi), which the engine fans out to every antibody
+# instance. Single-antibody runs keep the default rules in
+# modules/report.oxoflow (when = "... && !config.multi_antibody").
 
 [workflow]
-name = "chipseq-report"
+name = "chipseq-report-multi"
 version = "2.1.0"
-description = "IGV session file and MultiQC report"
+description = "IGV session file and MultiQC report — multi-antibody mode"
 
 [[rules]]
-name = "igv"
-description = "Create IGV session file (local nf-core/chipseq module)"
+name = "igv_multi"
+description = "Create IGV session file (local nf-core/chipseq module, multi-antibody mode)"
 input = [
     "{config.fasta}",
-    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.bed",
-    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.antibody.txt",
 ]
 output = [
     "results/igv/broad_peak/igv_session.xml",
@@ -39,8 +40,8 @@ cp {config.fasta} results/genome/genome.fa
 python3 scripts/igv_files_to_session.py igv_session.xml igv_files_orig.txt replace_paths.txt ../../genome/genome.fa --path_prefix '../../'
 mv igv_session.xml igv_files_orig.txt results/igv/broad_peak/
 """
-when = "!config.multi_antibody && !config.narrow_peak && !config.skip_igv"
-depends_on = ["tracks::ucsc_bedgraphtobigwig", "peaks::macs3_callpeak", "consensus::macs3_consensus"]
+when = "config.multi_antibody && !config.narrow_peak && !config.skip_igv"
+depends_on = ["tracks::ucsc_bedgraphtobigwig", "peaks::macs3_callpeak", "consensus::macs3_consensus_multi"]
 expand_inputs = [
     { pattern = "results/bwa/merged_library/bigwig/{pair_id}.mLb.clN.bigWig", variables = { pair_id = "config.pair_ids" } },
     { pattern = "results/bwa/merged_library/macs3/broad_peak/{pair_id}_peaks.broadPeak", variables = { pair_id = "config.ip_ids" } },
@@ -54,12 +55,10 @@ memory = "6G"
 docker = "quay.io/biocontainers/python:3.8.3"
 
 [[rules]]
-name = "igv_narrow"
-description = "Create IGV session file (local nf-core/chipseq module, narrow_peak mode)"
+name = "igv_narrow_multi"
+description = "Create IGV session file (local nf-core/chipseq module, narrow_peak + multi-antibody mode)"
 input = [
     "{config.fasta}",
-    "results/bwa/merged_library/macs3/narrow_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.bed",
-    "results/bwa/merged_library/macs3/narrow_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.antibody.txt",
 ]
 output = [
     "results/igv/narrow_peak/igv_session.xml",
@@ -81,8 +80,8 @@ cp {config.fasta} results/genome/genome.fa
 python3 scripts/igv_files_to_session.py igv_session.xml igv_files_orig.txt replace_paths.txt ../../genome/genome.fa --path_prefix '../../'
 mv igv_session.xml igv_files_orig.txt results/igv/narrow_peak/
 """
-when = "!config.multi_antibody && config.narrow_peak && !config.skip_igv"
-depends_on = ["tracks::ucsc_bedgraphtobigwig", "peaks::macs3_callpeak_narrow", "consensus::macs3_consensus_narrow"]
+when = "config.multi_antibody && config.narrow_peak && !config.skip_igv"
+depends_on = ["tracks::ucsc_bedgraphtobigwig", "peaks::macs3_callpeak_narrow", "consensus::macs3_consensus_narrow_multi"]
 expand_inputs = [
     { pattern = "results/bwa/merged_library/bigwig/{pair_id}.mLb.clN.bigWig", variables = { pair_id = "config.pair_ids" } },
     { pattern = "results/bwa/merged_library/macs3/narrow_peak/{pair_id}_peaks.narrowPeak", variables = { pair_id = "config.ip_ids" } },
@@ -96,13 +95,10 @@ memory = "6G"
 docker = "quay.io/biocontainers/python:3.8.3"
 
 [[rules]]
-name = "multiqc"
-description = "Aggregate QC into a MultiQC report (local nf-core/chipseq module)"
+name = "multiqc_multi"
+description = "Aggregate QC into a MultiQC report (local nf-core/chipseq module, multi-antibody mode)"
 input = [
     "results/bwa/merged_library/macs3/broad_peak/qc/macs3_annotatePeaks.summary_mqc.tsv",
-    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.featureCounts.txt.summary",
-    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/deseq2/{config.antibody}.consensus_peaks.pca.vals_mqc.tsv",
-    "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/deseq2/{config.antibody}.consensus_peaks.sample.dists_mqc.tsv",
 ]
 output = ["results/multiqc/broad_peak/multiqc_report.html"]
 shell = """
@@ -116,7 +112,7 @@ multiqc -f $MQC_ARGS .
 mv multiqc_report.html results/multiqc/broad_peak/
 [ -d multiqc_data ] && mv multiqc_data multiqc_plots results/multiqc/broad_peak/
 """
-when = "!config.multi_antibody && !config.narrow_peak && !config.skip_multiqc"
+when = "config.multi_antibody && !config.narrow_peak && !config.skip_multiqc"
 depends_on = [
     "qc::fastqc",
     "qc::trimgalore",
@@ -139,8 +135,8 @@ depends_on = [
     "tracks::deeptools_plotfingerprint",
     "peaks::multiqc_custom_peaks",
     "peaks::plot_homer_annotatepeaks",
-    "consensus::subread_featurecounts",
-    "consensus::deseq2_qc",
+    "consensus::subread_featurecounts_multi",
+    "consensus::deseq2_qc_multi",
 ]
 expand_inputs = [
     { pattern = "results/fastqc/zips/{pair_id}_1_fastqc.zip", variables = { pair_id = "config.pair_ids" } },
@@ -178,13 +174,10 @@ memory = "36G"
 docker = "quay.io/biocontainers/multiqc:1.23--pyhdfd78af_0"
 
 [[rules]]
-name = "multiqc_narrow"
-description = "Aggregate QC into a MultiQC report (local nf-core/chipseq module, narrow_peak mode)"
+name = "multiqc_narrow_multi"
+description = "Aggregate QC into a MultiQC report (local nf-core/chipseq module, narrow_peak + multi-antibody mode)"
 input = [
     "results/bwa/merged_library/macs3/narrow_peak/qc/macs3_annotatePeaks.summary_mqc.tsv",
-    "results/bwa/merged_library/macs3/narrow_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.featureCounts.txt.summary",
-    "results/bwa/merged_library/macs3/narrow_peak/consensus/{config.antibody}/deseq2/{config.antibody}.consensus_peaks.pca.vals_mqc.tsv",
-    "results/bwa/merged_library/macs3/narrow_peak/consensus/{config.antibody}/deseq2/{config.antibody}.consensus_peaks.sample.dists_mqc.tsv",
 ]
 output = ["results/multiqc/narrow_peak/multiqc_report.html"]
 shell = """
@@ -196,7 +189,7 @@ multiqc -f $MQC_ARGS .
 mv multiqc_report.html results/multiqc/narrow_peak/
 [ -d multiqc_data ] && mv multiqc_data multiqc_plots results/multiqc/narrow_peak/
 """
-when = "!config.multi_antibody && config.narrow_peak && !config.skip_multiqc"
+when = "config.multi_antibody && config.narrow_peak && !config.skip_multiqc"
 depends_on = [
     "qc::fastqc",
     "qc::trimgalore",
@@ -219,8 +212,8 @@ depends_on = [
     "tracks::deeptools_plotfingerprint",
     "peaks::multiqc_custom_peaks_narrow",
     "peaks::plot_homer_annotatepeaks_narrow",
-    "consensus::subread_featurecounts_narrow",
-    "consensus::deseq2_qc_narrow",
+    "consensus::subread_featurecounts_narrow_multi",
+    "consensus::deseq2_qc_narrow_multi",
 ]
 expand_inputs = [
     { pattern = "results/fastqc/zips/{pair_id}_1_fastqc.zip", variables = { pair_id = "config.pair_ids" } },

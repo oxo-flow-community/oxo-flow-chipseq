@@ -11,15 +11,18 @@ empty input. This generator emits, deterministically:
                             companion step — see README note below)
   references/chrom.sizes    UCSC chrom.sizes
   references/gene.bed       one annotated 'gene' region per peak
-  raw/<SAMPLE>_R{1,2}.fastq.gz  4 samples (S1_REP1/2, C1_REP1/2) x 5000
-                            paired 100bp reads, ~200bp inserts, 0.5%
-                            errors, ~25% PCR-duplicated pairs at 2-7x
-                            total multiplicity (consecutive levels —
-                            preseq needs a gap-free histogram)
+  raw/<SAMPLE>_R{1,2}.fastq.gz  8 samples (S1_REP1/2, S2_REP1/2,
+                            C1_REP1/2, C2_REP1/2) x 5000 paired 100bp
+                            reads, ~200bp inserts, 0.5% errors, ~25%
+                            PCR-duplicated pairs at 2-7x total
+                            multiplicity (consecutive levels — preseq
+                            needs a gap-free histogram)
 
-S1 (ChIP) reads concentrate in 6 peak regions (~80% of S1 pairs), C1
-(input) reads are uniform — macs2's treatment-vs-control comparison
-has real signal.
+S1/S2 (ChIP) reads concentrate in 6 peak regions (~80% of S1/S2
+pairs), C1/C2 (input) reads are uniform — macs2's
+treatment-vs-control comparison has real signal. The S2* samples are
+the second antibody's replicates for the multi-antibody consensus
+tests (see test/fixtures/samples.tsv).
 
 After regeneration, rebuild the BWA index (bwa index is not ported as
 a rule — upstream PREPARE_GENOME is user-provided):
@@ -28,6 +31,7 @@ a rule — upstream PREPARE_GENOME is user-provided):
     mv genome.fa.* test/fixtures/references/bwa_index/
 """
 import gzip
+import io
 import os
 import random
 
@@ -49,7 +53,18 @@ PEAKS = [
     ("chr2", 1000, 1600),
     ("chr2", 7000, 7600),
 ]
-SAMPLES = ["S1_REP1", "S1_REP2", "C1_REP1", "C1_REP2"]
+# S1* (H3K4me3) and S2* (H3K27ac) are the two antibody replicate sets;
+# C1*/C2* are their input controls. See test/fixtures/samples.tsv.
+SAMPLES = [
+    "S1_REP1",
+    "S1_REP2",
+    "C1_REP1",
+    "C1_REP2",
+    "S2_REP1",
+    "S2_REP2",
+    "C2_REP1",
+    "C2_REP2",
+]
 
 
 def make_genome(rng):
@@ -105,9 +120,16 @@ def write_sample(name, genomes, is_chip, rng):
             for k in range(mult):
                 r1_lines.append((rid + f"_d{k}/1", r1))
                 r2_lines.append((rid + f"_d{k}/2", r2))
-    with gzip.open(os.path.join(RAW, f"{name}_R1.fastq.gz"), "wt") as f1, gzip.open(
-        os.path.join(RAW, f"{name}_R2.fastq.gz"), "wt"
-    ) as f2:
+    # mtime=0 keeps the gzip headers deterministic — regenerating the same
+    # sample set reproduces byte-identical files (no git churn).
+    with gzip.GzipFile(
+        filename=os.path.join(RAW, f"{name}_R1.fastq.gz"), mode="wb", mtime=0
+    ) as gz1, gzip.GzipFile(
+        filename=os.path.join(RAW, f"{name}_R2.fastq.gz"), mode="wb", mtime=0
+    ) as gz2:
+        f1, f2 = io.TextIOWrapper(gz1, encoding="utf-8"), io.TextIOWrapper(
+            gz2, encoding="utf-8"
+        )
         for (h1, s1), (h2, s2) in zip(r1_lines, r2_lines):
             f1.write(f"{h1}\n{s1}\n+\n{'I' * READ_LEN}\n")
             f2.write(f"{h2}\n{s2}\n+\n{'I' * READ_LEN}\n")
@@ -117,8 +139,9 @@ def main():
     rng = random.Random(SEED)
     genomes = make_genome(rng)
     for name in SAMPLES:
-        write_sample(name, genomes, name.startswith("S1"), random.Random(SEED + len(name)))
-    print("chipseq fixtures regenerated: 20kb/10kb genome, 4 samples x 5000 pairs, 6 peaks")
+        is_chip = name.startswith(("S1", "S2"))
+        write_sample(name, genomes, is_chip, random.Random(SEED + len(name)))
+    print("chipseq fixtures regenerated: 20kb/10kb genome, 8 samples x 5000 pairs, 6 peaks")
     print("next: rebuild the BWA index (see docstring)")
 
 
