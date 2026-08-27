@@ -275,6 +275,11 @@ When the metadata table has fewer than two distinct antibodies with
 replicates, the multi rules fall back to the same per-sample behaviour
 as the single-antibody path.
 
+Multi-antibody mode requires oxo-flow >= 0.17 (the `input_groups`
+grouping, the `metadata_file` binding and pair-level `when`). Older
+engines ignore the new fields and run the default single-antibody path
+— byte-identical, and what CI validates against the released tarball.
+
 ## Test
 
 ```bash
