@@ -1,0 +1,18 @@
+# Multi-antibody execution profile — run the consensus chain once per
+# distinct antibody (see main.oxoflow `multi_antibody` and
+# modules/consensus_multi.oxoflow). The shipped fixtures carry two
+# antibody replicate sets (S1* = H3K4me3, S2* = H3K27ac) with their
+# controls (C1*/C2*) — see test/fixtures/samples.tsv.
+#
+# Usage:  oxo-flow run main.oxoflow --profile multi_antibody
+#
+# The merge mode is declared in the WORKFLOW's [workflow] table
+# (profile_mode = "override" in main.oxoflow): these values REPLACE the
+# workflow's [config] defaults wholesale — the default "fill" mode would
+# keep the four-sample lists because the keys already exist.
+
+[config]
+multi_antibody = true
+pair_ids = ["S1_REP1", "S1_REP2", "C1_REP1", "C1_REP2", "S2_REP1", "S2_REP2", "C2_REP1", "C2_REP2"]
+ip_ids = ["S1_REP1", "S1_REP2", "S2_REP1", "S2_REP2"]
+multiple_groups = true

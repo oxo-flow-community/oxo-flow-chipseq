@@ -8,6 +8,19 @@
 name = "chipseq"
 version = "2.1.0"
 description = "ChIP-seq peak calling, QC and differential analysis — oxo-flow port of nf-core/chipseq"
+# Per-sample metadata table (the samplesheet analogue, upstream
+# samplesheet.csv): a TSV whose FIRST column is the sample id (matching
+# pair_ids) with an `antibody` column — see test/fixtures/samples.tsv.
+# Required for multi-antibody runs (multi_antibody = true); inert when
+# multi_antibody = false (the single config.antibody path, byte-identical
+# to versions without a metadata table).
+metadata_file = "test/fixtures/samples.tsv"
+# Only consulted when a --profile is merged: "fill" (default) lets a
+# profile set keys the workflow does not declare; "override" REPLACES
+# workflow values wholesale. The multi_antibody profile relies on
+# override (it must swap the shipped four-sample lists for the full
+# eight-sample fixture set). No effect without --profile.
+profile_mode = "override"
 
 [defaults]
 threads = 1
@@ -44,6 +57,17 @@ antibody = "H3K4me3"
 multiple_groups = false
 replicates_exist = true
 min_reps_consensus = 1
+# Multi-antibody consensus: when true, the consensus chain (MACS3
+# consensus, HOMER annotation, boolean annotation, featureCounts,
+# DESeq2 QC) runs ONCE PER DISTINCT ANTIBODY over that antibody's IP
+# samples, mirroring the upstream groupTuple(by: antibody) grouping —
+# the antibody values come from the metadata_file's `antibody` column
+# (empty cells = control/input samples, excluded from consensus).
+# Requires metadata_file to be set; pair_ids/ip_ids must list ALL
+# samples (all antibodies' replicates + their controls). The
+# multi_antibody = true profile (profiles/multi_antibody.toml) switches
+# the shipped test data to the two-antibody fixture set.
+multi_antibody = false
 
 # Read group / trimming
 seq_center = ""
@@ -139,6 +163,32 @@ experiment = "C1_REP1"
 pair_id = "C1_REP2"
 experiment = "C1_REP2"
 
+# Second antibody replicate set (S2* = H3K27ac, C2* controls) — gated on
+# config.multi_antibody so the default single-antibody run is byte-identical
+# (pair-level `when` declares no rule instances while the toggle is false;
+# the multi_antibody profile flips it and replaces pair_ids/ip_ids).
+[[pairs]]
+pair_id = "S2_REP1"
+experiment = "S2_REP1"
+control = "C2_REP1"
+when = "config.multi_antibody"
+
+[[pairs]]
+pair_id = "S2_REP2"
+experiment = "S2_REP2"
+control = "C2_REP2"
+when = "config.multi_antibody"
+
+[[pairs]]
+pair_id = "C2_REP1"
+experiment = "C2_REP1"
+when = "config.multi_antibody"
+
+[[pairs]]
+pair_id = "C2_REP2"
+experiment = "C2_REP2"
+when = "config.multi_antibody"
+
 # ---------------------------------------------------------------------------
 # Rule fragments
 # ---------------------------------------------------------------------------
@@ -170,6 +220,17 @@ namespace = "peaks"
 path = "modules/consensus.oxoflow"
 namespace = "consensus"
 
+# Multi-antibody variants of the consensus chain — gated on
+# config.multi_antibody; the default rules above carry the inverse gate.
+[[include]]
+path = "modules/consensus_multi.oxoflow"
+namespace = "consensus"
+
 [[include]]
 path = "modules/report.oxoflow"
+namespace = "report"
+
+# Multi-antibody variants of IGV/MultiQC — same gate split.
+[[include]]
+path = "modules/report_multi.oxoflow"
 namespace = "report"

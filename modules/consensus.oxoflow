@@ -1,11 +1,14 @@
 # Consensus peaks and quantification — ports nf-core/chipseq
 # BED_CONSENSUS_QUANTIFY_QC_BEDTOOLS_FEATURECOUNTS_DESEQ2. The upstream
-# subworkflow groups peaks by antibody; this port assumes a single antibody
-# (config.antibody) — multi-antibody experiments are out of scope (README).
-# In narrow_peak mode the MACS3_CONSENSUS module switches its merge columns
-# (2-10 instead of 2-9, one column per narrowPeak field) and passes
-# --is_narrow_peak to macs3_merged_expand.py; every *_narrow rule below
-# mirrors exactly that, under the narrow_peak/ directories.
+# subworkflow groups peaks by antibody; this module is the single-antibody
+# path (config.antibody), byte-identical to versions before multi-antibody
+# support. The grouped per-antibody variants live in
+# modules/consensus_multi.oxoflow (gated on config.multi_antibody, with the
+# inverse gate on every `when` here). In narrow_peak mode the MACS3_CONSENSUS
+# module switches its merge columns (2-10 instead of 2-9, one column per
+# narrowPeak field) and passes --is_narrow_peak to macs3_merged_expand.py;
+# every *_narrow rule below mirrors exactly that, under the narrow_peak/
+# directories.
 
 [workflow]
 name = "chipseq-consensus"
@@ -40,8 +43,11 @@ Rscript scripts/plot_peak_intersect.r -i $CONS/{config.antibody}.consensus_peaks
 # splits replace_paths.txt on tabs (live: 'not enough values to unpack').
 printf "%s\\t%s\\n" "{config.antibody}.consensus_peaks.bed" "$CONS/{config.antibody}.consensus_peaks.bed" > $CONS/{config.antibody}.consensus_peaks.antibody.txt
 """
-when = "!config.narrow_peak && !config.skip_consensus_peaks && (config.multiple_groups || config.replicates_exist)"
-depends_on = ["peaks::macs3_callpeak"]
+when = "!config.multi_antibody && !config.narrow_peak && !config.skip_consensus_peaks && (config.multiple_groups || config.replicates_exist)"
+# No depends_on: the ip_ids-scoped expand_inputs below already edges to the IP callpeak
+# instances. A rule-level depends_on would also edge to the control samples, whose
+# callpeak instances skip (optional, empty {control}) and then block this rule — and,
+# via skipped-no-output propagation, the whole consensus/quantification/report tail.
 expand_inputs = [
     { pattern = "results/bwa/merged_library/macs3/broad_peak/{pair_id}_peaks.broadPeak", variables = { pair_id = "config.ip_ids" } },
 ]
@@ -81,8 +87,8 @@ awk -v FS='\\t' -v OFS='\\t' 'FNR > 1 { print $4, $1, $2, $3, "+" }' $CONS/{conf
 Rscript scripts/plot_peak_intersect.r -i $CONS/{config.antibody}.consensus_peaks.boolean.intersect.txt -o $CONS/{config.antibody}.consensus_peaks.boolean.intersect.plot.pdf
 printf "%s\\t%s\\n" "{config.antibody}.consensus_peaks.bed" "$CONS/{config.antibody}.consensus_peaks.bed" > $CONS/{config.antibody}.consensus_peaks.antibody.txt
 """
-when = "config.narrow_peak && !config.skip_consensus_peaks && (config.multiple_groups || config.replicates_exist)"
-depends_on = ["peaks::macs3_callpeak_narrow"]
+when = "!config.multi_antibody && config.narrow_peak && !config.skip_consensus_peaks && (config.multiple_groups || config.replicates_exist)"
+# No depends_on (see macs3_consensus): expand_inputs edges to the IP narrow-callpeak instances.
 expand_inputs = [
     { pattern = "results/bwa/merged_library/macs3/narrow_peak/{pair_id}_peaks.narrowPeak", variables = { pair_id = "config.ip_ids" } },
 ]
@@ -107,7 +113,7 @@ output = ["results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibod
 shell = """
 annotatePeaks.pl {input[0]} {config.fasta} -gid -gtf {config.gtf} -cpu {threads} > {output[0]}
 """
-when = "!config.narrow_peak && !config.skip_consensus_peaks && !config.skip_peak_annotation && (config.multiple_groups || config.replicates_exist)"
+when = "!config.multi_antibody && !config.narrow_peak && !config.skip_consensus_peaks && !config.skip_peak_annotation && (config.multiple_groups || config.replicates_exist)"
 
 [rules.resources]
 threads = 6
@@ -128,7 +134,7 @@ output = ["results/bwa/merged_library/macs3/narrow_peak/consensus/{config.antibo
 shell = """
 annotatePeaks.pl {input[0]} {config.fasta} -gid -gtf {config.gtf} -cpu {threads} > {output[0]}
 """
-when = "config.narrow_peak && !config.skip_consensus_peaks && !config.skip_peak_annotation && (config.multiple_groups || config.replicates_exist)"
+when = "!config.multi_antibody && config.narrow_peak && !config.skip_consensus_peaks && !config.skip_peak_annotation && (config.multiple_groups || config.replicates_exist)"
 
 [rules.resources]
 threads = 6
@@ -149,7 +155,7 @@ shell = """
 cut -f2- {input[1]} | awk 'NR==1; NR > 1 {print $0 | "sort -T '.' -k1,1 -k2,2n"}' | cut -f6- > tmp.txt
 paste {input[0]} tmp.txt > {output[0]}
 """
-when = "!config.narrow_peak && !config.skip_consensus_peaks && !config.skip_peak_annotation && (config.multiple_groups || config.replicates_exist)"
+when = "!config.multi_antibody && !config.narrow_peak && !config.skip_consensus_peaks && !config.skip_peak_annotation && (config.multiple_groups || config.replicates_exist)"
 
 [rules.resources]
 threads = 2
@@ -170,7 +176,7 @@ shell = """
 cut -f2- {input[1]} | awk 'NR==1; NR > 1 {print $0 | "sort -T '.' -k1,1 -k2,2n"}' | cut -f6- > tmp.txt
 paste {input[0]} tmp.txt > {output[0]}
 """
-when = "config.narrow_peak && !config.skip_consensus_peaks && !config.skip_peak_annotation && (config.multiple_groups || config.replicates_exist)"
+when = "!config.multi_antibody && config.narrow_peak && !config.skip_consensus_peaks && !config.skip_peak_annotation && (config.multiple_groups || config.replicates_exist)"
 
 [rules.resources]
 threads = 2
@@ -192,7 +198,7 @@ mkdir -p results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}
 BAMS=$(echo {input} | tr ' ' '\\n' | grep 'mLb.clN.sorted.bam$' | tr '\\n' ' ')
 featureCounts -F SAF -O --fracOverlap 0.2 -p -T {threads} -a {input[0]} -s 0 -o {output[0]} $BAMS
 """
-when = "!config.narrow_peak && !config.skip_consensus_peaks && (config.multiple_groups || config.replicates_exist)"
+when = "!config.multi_antibody && !config.narrow_peak && !config.skip_consensus_peaks && (config.multiple_groups || config.replicates_exist)"
 depends_on = ["filter::flagstat_filter", "macs3_consensus"]
 expand_inputs = [
     { pattern = "results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam", variables = { pair_id = "config.ip_ids" } },
@@ -218,7 +224,7 @@ mkdir -p results/bwa/merged_library/macs3/narrow_peak/consensus/{config.antibody
 BAMS=$(echo {input} | tr ' ' '\\n' | grep 'mLb.clN.sorted.bam$' | tr '\\n' ' ')
 featureCounts -F SAF -O --fracOverlap 0.2 -p -T {threads} -a {input[0]} -s 0 -o {output[0]} $BAMS
 """
-when = "config.narrow_peak && !config.skip_consensus_peaks && (config.multiple_groups || config.replicates_exist)"
+when = "!config.multi_antibody && config.narrow_peak && !config.skip_consensus_peaks && (config.multiple_groups || config.replicates_exist)"
 depends_on = ["filter::flagstat_filter", "macs3_consensus_narrow"]
 expand_inputs = [
     { pattern = "results/bwa/merged_library/{pair_id}.mLb.clN.sorted.bam", variables = { pair_id = "config.ip_ids" } },
@@ -258,7 +264,7 @@ sed -i -e 's/DESeq2 /{config.antibody} DESeq2 /g' tmp.txt
 cat tmp.txt {config.antibody}.consensus_peaks.sample.dists.txt > {config.antibody}.consensus_peaks.sample.dists_mqc.tsv
 mv {config.antibody}.consensus_peaks.pca.vals.txt {config.antibody}.consensus_peaks.sample.dists.txt {config.antibody}.consensus_peaks.pca.vals_mqc.tsv {config.antibody}.consensus_peaks.sample.dists_mqc.tsv {config.antibody}.consensus_peaks.plots.pdf {config.antibody}.consensus_peaks.dds.RData results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/deseq2/
 """
-when = "!config.narrow_peak && !config.skip_consensus_peaks && !config.skip_deseq2_qc && config.multiple_groups && config.replicates_exist"
+when = "!config.multi_antibody && !config.narrow_peak && !config.skip_consensus_peaks && !config.skip_deseq2_qc && config.multiple_groups && config.replicates_exist"
 
 [rules.resources]
 threads = 6
@@ -294,7 +300,7 @@ sed -i -e 's/DESeq2 /{config.antibody} DESeq2 /g' tmp.txt
 cat tmp.txt {config.antibody}.consensus_peaks.sample.dists.txt > {config.antibody}.consensus_peaks.sample.dists_mqc.tsv
 mv {config.antibody}.consensus_peaks.pca.vals.txt {config.antibody}.consensus_peaks.sample.dists.txt {config.antibody}.consensus_peaks.pca.vals_mqc.tsv {config.antibody}.consensus_peaks.sample.dists_mqc.tsv {config.antibody}.consensus_peaks.plots.pdf {config.antibody}.consensus_peaks.dds.RData results/bwa/merged_library/macs3/narrow_peak/consensus/{config.antibody}/deseq2/
 """
-when = "config.narrow_peak && !config.skip_consensus_peaks && !config.skip_deseq2_qc && config.multiple_groups && config.replicates_exist"
+when = "!config.multi_antibody && config.narrow_peak && !config.skip_consensus_peaks && !config.skip_deseq2_qc && config.multiple_groups && config.replicates_exist"
 
 [rules.resources]
 threads = 6

@@ -14,7 +14,9 @@ QC plots, MACS3 peak calling with input controls in broad (default) or narrow
 mode, HOMER peak annotation, FRiP scoring, consensus peaks across replicates
 (MACS3 merge + featureCounts quantification + DESeq2 QC), an IGV session and a
 MultiQC report. Runs paired-end samples; `aligner` and `narrow_peak` select the
-alignment/peak branches.
+alignment/peak branches, and an optional multi-antibody mode runs the
+consensus chain once per antibody (see
+[Multi-antibody runs](#multi-antibody-runs)).
 
 ## Installation
 
@@ -103,7 +105,8 @@ unchanged when all are off):
 The workflow runs with the **docker** backend (all tools pinned to the
 upstream container images). Replace the `test/fixtures` input paths in
 `main.oxoflow` `[config]` with your own reads and references, and edit
-`[[pairs]]`/`ip_ids` to match your samplesheet. Results are written to
+`[[pairs]]`/`ip_ids` (plus the `metadata_file` sample sheet for
+multi-antibody runs) to match your samplesheet. Results are written to
 `results/`.
 
 ## Source
@@ -169,7 +172,7 @@ ported are listed with reasons.
 | UMI handling (UMITOOLS_EXTRACT, umi_extract) | — | — | **not ported** — `with_umi=false` is hardcoded in chipseq.nf at 2.1.0 (dead branch; the parameter does not exist) |
 | save_reference / save_trimmed / save_unaligned outputs | — | — | publish branches that are `false` by default upstream; the port always behaves as `save_align_intermeds=true` (intermediates are kept). Upstream 2.1.0 has no `save_mapped` / `save_tracks` params. `save_macs_pileup` IS ported (conditional pileup publication in both macs3 rules) |
 | DUMP_SOFTWARE_VERSIONS / pipeline summary + software versions sections of MultiQC | — | — | **not ported** — Nextflow metadata plumbing (paramsSummaryMap/softwareVersionsToYAML); `multiqc_data/` and `multiqc_plots/` ARE published |
-| Multi-antibody consensus (`consensus_cluster` grouping) | — | — | single antibody (`config.antibody`) per run; upstream multi-antibody grouping is out of scope |
+| Multi-antibody consensus (`consensus_cluster` grouping) | `macs3_consensus_multi` / `homer_annotate_consensus_multi` / `annotate_boolean_peaks_multi` / `subread_featurecounts_multi` / `deseq2_qc_multi` / `igv_multi` / `multiqc_multi` (+ `*_narrow_multi` variants) | same tools | upstream groups the consensus chain by `meta.antibody` (groupTuple `by: antibody`); the port does the same with the engine's metadata binding — `[workflow] metadata_file` (TSV: sample + antibody columns) + `input_groups` `group_by = "meta.antibody"` runs the consensus chain once per distinct antibody with per-antibody inputs, and the IGV/MultiQC rules collect every antibody. Gated on `config.multi_antibody` (default `false` — the single-antibody `config.antibody` path is byte-identical); see [Multi-antibody runs](#multi-antibody-runs) |
 
 ### Known divergences
 
@@ -203,8 +206,10 @@ ported are listed with reasons.
   whole pipeline, so only the single-library default path (the upstream
   symlink shortcut, replicated exactly) is ported.
 - **MultiQC config**: `path_filters` and `report_section_order` were adapted
-  to the port's `results/` layout and the single-antibody assumption;
-  module order and custom-content sections are otherwise identical.
+  to the port's `results/` layout and the `antibody.txt` convention; the
+  `multiqc_multi` variant scans the per-antibody `consensus/{antibody}/`
+  trees instead of relying on antibody-specific inputs. Module order and
+  custom-content sections are otherwise identical.
 - **Aligner output tree**: every aligner's results stay under `results/bwa/`
   (bwa_mem/star_align/bowtie2_align/chromap_align all produce
   `results/bwa/library/{pair_id}.Lb.bam`, so the whole downstream chain is
@@ -232,6 +237,48 @@ ported are listed with reasons.
 - **known limitation**: with `skip_consensus_peaks = true` the IGV/MultiQC
   consensus inputs (`consensus_peaks.bed`, featureCounts summary) are absent;
   keep the default (`false`) or set `skip_igv`/`skip_multiqc` together.
+
+## Multi-antibody runs
+
+Upstream groups the consensus chain (consensus peaks, annotation,
+featureCounts quantification, DESeq2 QC) by the samplesheet's `antibody`
+column. The port replicates that with the engine's metadata binding:
+
+- `[workflow] metadata_file` — a TSV whose first column is the sample id
+  (matching `[[pairs]]` `pair_id`) plus an `antibody` column; samples
+  without an antibody (controls) are excluded from the groups. The shipped
+  `test/fixtures/samples.tsv` carries two antibody replicate sets
+  (S1* = H3K4me3, S2* = H3K27ac) with their controls (C1*/C2*).
+- `config.multi_antibody = true` — runs `macs3_consensus_multi`,
+  `homer_annotate_consensus_multi`, `annotate_boolean_peaks_multi`,
+  `subread_featurecounts_multi` and `deseq2_qc_multi` once per distinct
+  antibody (each with its own BAMs and peaks), plus `igv_multi` /
+  `multiqc_multi` collecting every antibody. With the default `false` the
+  single-antibody `config.antibody` path runs, byte-identical to a
+  workflow without a metadata table.
+
+The easiest way to use it is the shipped profile, which flips the toggle
+and replaces the four-sample fixture lists with the full eight-sample set
+(`profiles/multi_antibody.toml`; the merge mode comes from
+`profile_mode = "override"` in `main.oxoflow` — see
+[the oxo-flow profile docs](https://oxo-flow.readthedocs.io/en/latest/commands/run/#profiles)):
+
+```bash
+oxo-flow run main.oxoflow --profile multi_antibody
+```
+
+For your own data, keep `metadata_file`'s first column in sync with
+`[[pairs]]`, set `multi_antibody = true` (plus your full `pair_ids` /
+`ip_ids` lists), and declare the second antibody's pairs with
+`when = "config.multi_antibody"` so they only fan out in multi mode.
+When the metadata table has fewer than two distinct antibodies with
+replicates, the multi rules fall back to the same per-sample behaviour
+as the single-antibody path.
+
+Multi-antibody mode requires oxo-flow >= 0.17 (the `input_groups`
+grouping, the `metadata_file` binding and pair-level `when`). Older
+engines ignore the new fields and run the default single-antibody path
+— byte-identical, and what CI validates against the released tarball.
 
 ## Test
 

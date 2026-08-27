@@ -260,7 +260,10 @@ mkdir -p results/bwa/merged_library/macs3/broad_peak/qc
 Rscript scripts/plot_macs3_qc.r -i $(echo {input} | tr ' ' ',') -s $(echo {input} | tr ' ' ',' | sed 's/_peaks.broadPeak//g') -o results/bwa/merged_library/macs3/broad_peak/qc -p macs3_peak
 """
 when = "!config.narrow_peak && !config.skip_peak_annotation && !config.skip_peak_qc"
-depends_on = ["macs3_callpeak"]
+# No depends_on: the ip_ids-scoped expand_inputs below already edges to the IP callpeak
+# instances. A rule-level depends_on would also edge to the control samples, whose
+# callpeak instances skip (optional, empty {control}) and then block this rule (the
+# engine blocks any non-optional rule with a skipped-no-output dependency).
 expand_inputs = [
     { pattern = "results/bwa/merged_library/macs3/broad_peak/{pair_id}_peaks.broadPeak", variables = { pair_id = "config.ip_ids" } },
 ]
@@ -285,7 +288,7 @@ mkdir -p results/bwa/merged_library/macs3/narrow_peak/qc
 Rscript scripts/plot_macs3_qc.r -i $(echo {input} | tr ' ' ',') -s $(echo {input} | tr ' ' ',' | sed 's/_peaks.narrowPeak//g') -o results/bwa/merged_library/macs3/narrow_peak/qc -p macs3_peak
 """
 when = "config.narrow_peak && !config.skip_peak_annotation && !config.skip_peak_qc"
-depends_on = ["macs3_callpeak_narrow"]
+# No depends_on (see plot_macs3_qc): expand_inputs edges to the IP narrow-callpeak instances.
 expand_inputs = [
     { pattern = "results/bwa/merged_library/macs3/narrow_peak/{pair_id}_peaks.narrowPeak", variables = { pair_id = "config.ip_ids" } },
 ]
@@ -313,7 +316,7 @@ Rscript scripts/plot_homer_annotatepeaks.r -i $(echo $ANNOS | tr ' ' ',') -s $(e
 cat results/bwa/merged_library/macs3/broad_peak/qc/macs3_annotatePeaks.summary.txt | cat assets/multiqc/peak_annotation_header.txt - > results/bwa/merged_library/macs3/broad_peak/qc/macs3_annotatePeaks.summary_mqc.tsv
 """
 when = "!config.narrow_peak && !config.skip_peak_annotation && !config.skip_peak_qc"
-depends_on = ["homer_annotatepeaks"]
+# No depends_on (see plot_macs3_qc): expand_inputs edges to the IP homer_annotatepeaks instances.
 expand_inputs = [
     { pattern = "results/bwa/merged_library/macs3/broad_peak/{pair_id}_peaks.annotatePeaks.txt", variables = { pair_id = "config.ip_ids" } },
 ]
@@ -341,7 +344,7 @@ Rscript scripts/plot_homer_annotatepeaks.r -i $(echo $ANNOS | tr ' ' ',') -s $(e
 cat results/bwa/merged_library/macs3/narrow_peak/qc/macs3_annotatePeaks.summary.txt | cat assets/multiqc/peak_annotation_header.txt - > results/bwa/merged_library/macs3/narrow_peak/qc/macs3_annotatePeaks.summary_mqc.tsv
 """
 when = "config.narrow_peak && !config.skip_peak_annotation && !config.skip_peak_qc"
-depends_on = ["homer_annotatepeaks_narrow"]
+# No depends_on (see plot_macs3_qc).
 expand_inputs = [
     { pattern = "results/bwa/merged_library/macs3/narrow_peak/{pair_id}_peaks.annotatePeaks.txt", variables = { pair_id = "config.ip_ids" } },
 ]
