@@ -289,10 +289,13 @@ output = [
 shell = """
 mkdir -p results/bwa/merged_library/macs3/broad_peak/consensus/{antibody}/deseq2
 Rscript scripts/deseq2_qc.r --count_file {input[0]} --outdir ./ --outprefix {antibody}.consensus_peaks --cores {threads} --id_col 1 --sample_suffix '.mLb.clN.sorted.bam' --count_col 7 --vst TRUE
-sed 's/deseq2_pca/deseq2_pca_1/g' < assets/multiqc/deseq2_pca_header.txt > tmp.txt
+# Unique MultiQC id/anchor per antibody: upstream suffixes with ${task.index}
+# (deseq2_pca_1, _2, ...); this port's group instance key is {antibody}, so the
+# same uniqueness comes from suffixing the id/anchor with the antibody value.
+sed 's/deseq2_pca/deseq2_pca_{antibody}/g' < assets/multiqc/deseq2_pca_header.txt > tmp.txt
 sed -i -e 's/DESeq2 /{antibody} DESeq2 /g' tmp.txt
 cat tmp.txt {antibody}.consensus_peaks.pca.vals.txt > {antibody}.consensus_peaks.pca.vals_mqc.tsv
-sed 's/deseq2_clustering/deseq2_clustering_1/g' < assets/multiqc/deseq2_clustering_header.txt > tmp.txt
+sed 's/deseq2_clustering/deseq2_clustering_{antibody}/g' < assets/multiqc/deseq2_clustering_header.txt > tmp.txt
 sed -i -e 's/DESeq2 /{antibody} DESeq2 /g' tmp.txt
 cat tmp.txt {antibody}.consensus_peaks.sample.dists.txt > {antibody}.consensus_peaks.sample.dists_mqc.tsv
 mv {antibody}.consensus_peaks.pca.vals.txt {antibody}.consensus_peaks.sample.dists.txt {antibody}.consensus_peaks.pca.vals_mqc.tsv {antibody}.consensus_peaks.sample.dists_mqc.tsv {antibody}.consensus_peaks.plots.pdf {antibody}.consensus_peaks.dds.RData results/bwa/merged_library/macs3/broad_peak/consensus/{antibody}/deseq2/
@@ -329,10 +332,13 @@ output = [
 shell = """
 mkdir -p results/bwa/merged_library/macs3/narrow_peak/consensus/{antibody}/deseq2
 Rscript scripts/deseq2_qc.r --count_file {input[0]} --outdir ./ --outprefix {antibody}.consensus_peaks --cores {threads} --id_col 1 --sample_suffix '.mLb.clN.sorted.bam' --count_col 7 --vst TRUE
-sed 's/deseq2_pca/deseq2_pca_1/g' < assets/multiqc/deseq2_pca_header.txt > tmp.txt
+# Unique MultiQC id/anchor per antibody: upstream suffixes with ${task.index}
+# (deseq2_pca_1, _2, ...); this port's group instance key is {antibody}, so the
+# same uniqueness comes from suffixing the id/anchor with the antibody value.
+sed 's/deseq2_pca/deseq2_pca_{antibody}/g' < assets/multiqc/deseq2_pca_header.txt > tmp.txt
 sed -i -e 's/DESeq2 /{antibody} DESeq2 /g' tmp.txt
 cat tmp.txt {antibody}.consensus_peaks.pca.vals.txt > {antibody}.consensus_peaks.pca.vals_mqc.tsv
-sed 's/deseq2_clustering/deseq2_clustering_1/g' < assets/multiqc/deseq2_clustering_header.txt > tmp.txt
+sed 's/deseq2_clustering/deseq2_clustering_{antibody}/g' < assets/multiqc/deseq2_clustering_header.txt > tmp.txt
 sed -i -e 's/DESeq2 /{antibody} DESeq2 /g' tmp.txt
 cat tmp.txt {antibody}.consensus_peaks.sample.dists.txt > {antibody}.consensus_peaks.sample.dists_mqc.tsv
 mv {antibody}.consensus_peaks.pca.vals.txt {antibody}.consensus_peaks.sample.dists.txt {antibody}.consensus_peaks.pca.vals_mqc.tsv {antibody}.consensus_peaks.sample.dists_mqc.tsv {antibody}.consensus_peaks.plots.pdf {antibody}.consensus_peaks.dds.RData results/bwa/merged_library/macs3/narrow_peak/consensus/{antibody}/deseq2/

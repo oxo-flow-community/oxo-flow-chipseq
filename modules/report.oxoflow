@@ -118,6 +118,9 @@ multiqc -f $MQC_ARGS .
 # Publish the report plus the data/plots directories (upstream publishDir
 # copies multiqc_data/ and multiqc_plots/ into results/multiqc/).
 mv multiqc_report.html results/multiqc/broad_peak/
+# Stale multiqc_data/plots from a previous run block the mv (resume moves the
+# declared report file aside but not these directories) — clear them first.
+[ -d results/multiqc/broad_peak/multiqc_data ] && rm -rf results/multiqc/broad_peak/multiqc_data results/multiqc/broad_peak/multiqc_plots
 [ -d multiqc_data ] && mv multiqc_data multiqc_plots results/multiqc/broad_peak/
 """
 when = "!config.multi_antibody && !config.narrow_peak && !config.skip_multiqc"
@@ -198,6 +201,8 @@ mkdir -p results/multiqc/narrow_peak
 cp assets/multiqc_config.yml multiqc_config.yml
 multiqc -f $MQC_ARGS .
 mv multiqc_report.html results/multiqc/narrow_peak/
+# Stale multiqc_data/plots from a previous run block the mv — clear them first.
+[ -d results/multiqc/narrow_peak/multiqc_data ] && rm -rf results/multiqc/narrow_peak/multiqc_data results/multiqc/narrow_peak/multiqc_plots
 [ -d multiqc_data ] && mv multiqc_data multiqc_plots results/multiqc/narrow_peak/
 """
 when = "!config.multi_antibody && config.narrow_peak && !config.skip_multiqc"
