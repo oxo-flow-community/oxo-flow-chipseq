@@ -32,6 +32,12 @@ memory = "6G"
 # *.bwt, *.pac, *.sa) for the reference FASTA.
 # ---------------------------------------------------------------------------
 [config]
+# Library fan-out dimension (issue #7): the aligner/sort/index/QC chain fans
+# per {library} and Picard MergeSamFiles gathers every library into the
+# per-pair mLb BAM (upstream library_id rows). Default "Lb" preserves the
+# single-library port byte-for-byte; multi-library pairs:
+# --arg library_ids=Lb,Lb2 (or a profile).
+library_ids = "Lb"
 fasta = "test/fixtures/references/genome.fa"
 fai = "test/fixtures/references/genome.fa.fai"
 gtf = "test/fixtures/references/genome.gtf"
@@ -192,6 +198,16 @@ when = "config.multi_antibody"
 # ---------------------------------------------------------------------------
 # Rule fragments
 # ---------------------------------------------------------------------------
+
+# Library dimension (issue #7): {library} fans the aligner/sort/index/QC
+# chain per library; Picard MergeSamFiles gathers every library's sorted BAM
+# into the per-pair mLb.bam. Default "Lb" keeps the single-library file
+# names (upstream .Lb.bam) byte-identical.
+[[values]]
+name = "library"
+values = ["Lb"]
+values_from = "config.library_ids"
+
 [[include]]
 path = "modules/read_qc.oxoflow"
 namespace = "qc"

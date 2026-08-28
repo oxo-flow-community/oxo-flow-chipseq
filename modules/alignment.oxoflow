@@ -24,7 +24,7 @@ input = [
     "{config.bwa_index}",
     "{config.fasta}",
 ]
-output = ["results/bwa/library/{pair_id}.Lb.bam"]
+output = ["results/bwa/library/{pair_id}.{library}.bam"]
 when = "config.aligner == 'bwa'"
 depends_on = ["reference::bwa_index_build"]
 shell = """
@@ -63,7 +63,7 @@ input = [
     "{config.star_index}",
 ]
 output = [
-    "results/bwa/library/{pair_id}.Lb.bam",
+    "results/bwa/library/{pair_id}.{library}.bam",
     "results/bwa/library/log/{pair_id}.Log.final.out",
     "results/bwa/library/log/{pair_id}.Log.out",
     "results/bwa/library/log/{pair_id}.Log.progress.out",
@@ -106,7 +106,7 @@ input = [
     "{config.fasta}",
 ]
 output = [
-    "results/bwa/library/{pair_id}.Lb.bam",
+    "results/bwa/library/{pair_id}.{library}.bam",
     "results/bwa/library/log/{pair_id}.Lb.bowtie2.log",
 ]
 shell = """
@@ -153,7 +153,7 @@ input = [
     "{config.chromap_index}",
     "{config.fasta}",
 ]
-output = ["results/bwa/library/{pair_id}.Lb.bam"]
+output = ["results/bwa/library/{pair_id}.{library}.bam"]
 shell = """
 set -euo pipefail
 # Faithful port of the 2.1.0 CHROMAP_CHROMAP module with the chipseq
@@ -184,11 +184,11 @@ docker = "quay.io/biocontainers/mulled-v2-1f09f39f20b1c4ee36581dc81cc323c70e6616
 
 [[rules]]
 name = "sort_align"
-description = "Coordinate-sort aligned BAM (nf-core/samtools/sort)"
-input = ["results/bwa/library/{pair_id}.Lb.bam", "{config.fasta}"]
-output = ["results/bwa/library/{pair_id}.Lb.sorted.bam"]
+description = "Coordinate-sort aligned BAM (nf-core/samtools/sort; per-library with the {library} fan-out — single-library default keeps the .Lb name)"
+input = ["results/bwa/library/{pair_id}.{library}.bam", "{config.fasta}"]
+output = ["results/bwa/library/{pair_id}.{library}.sorted.bam"]
 shell = """
-samtools cat --threads {threads} {input[0]} | samtools sort -T {pair_id}.Lb.sorted --threads {threads} -o {output[0]} -
+samtools cat --threads {threads} {input[0]} | samtools sort -T {pair_id}.{library}.sorted --threads {threads} -o {output[0]} -
 """
 
 [rules.resources]
@@ -201,8 +201,8 @@ docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 [[rules]]
 name = "index_align"
 description = "Index aligned BAM (nf-core/samtools/index)"
-input = ["results/bwa/library/{pair_id}.Lb.sorted.bam", "{config.fasta}"]
-output = ["results/bwa/library/{pair_id}.Lb.sorted.bam.bai"]
+input = ["results/bwa/library/{pair_id}.{library}.sorted.bam", "{config.fasta}"]
+output = ["results/bwa/library/{pair_id}.{library}.sorted.bam.bai"]
 shell = """
 samtools index -@ $(({threads} - 1)) {input[0]}
 """
@@ -218,11 +218,11 @@ docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 name = "stats_align"
 description = "samtools stats on aligned BAM (nf-core/samtools/stats)"
 input = [
-    "results/bwa/library/{pair_id}.Lb.sorted.bam",
-    "results/bwa/library/{pair_id}.Lb.sorted.bam.bai",
+    "results/bwa/library/{pair_id}.{library}.sorted.bam",
+    "results/bwa/library/{pair_id}.{library}.sorted.bam.bai",
     "{config.fasta}",
 ]
-output = ["results/bwa/library/samtools_stats/{pair_id}.Lb.sorted.bam.stats"]
+output = ["results/bwa/library/samtools_stats/{pair_id}.{library}.sorted.bam.stats"]
 shell = """
 mkdir -p results/bwa/library/samtools_stats
 samtools stats --threads {threads} --reference {config.fasta} {input[0]} > {output[0]}
@@ -242,7 +242,7 @@ input = [
     "results/bwa/library/{pair_id}.Lb.sorted.bam",
     "results/bwa/library/{pair_id}.Lb.sorted.bam.bai",
 ]
-output = ["results/bwa/library/samtools_stats/{pair_id}.Lb.sorted.bam.flagstat"]
+output = ["results/bwa/library/samtools_stats/{pair_id}.{library}.sorted.bam.flagstat"]
 shell = """
 mkdir -p results/bwa/library/samtools_stats
 samtools flagstat --threads {threads} {input[0]} > {output[0]}
@@ -262,7 +262,7 @@ input = [
     "results/bwa/library/{pair_id}.Lb.sorted.bam",
     "results/bwa/library/{pair_id}.Lb.sorted.bam.bai",
 ]
-output = ["results/bwa/library/samtools_stats/{pair_id}.Lb.sorted.bam.idxstats"]
+output = ["results/bwa/library/samtools_stats/{pair_id}.{library}.sorted.bam.idxstats"]
 shell = """
 mkdir -p results/bwa/library/samtools_stats
 samtools idxstats --threads $(({threads} - 1)) {input[0]} > {output[0]}
@@ -277,8 +277,11 @@ docker = "quay.io/biocontainers/samtools:1.20--h50ea8bc_0"
 
 [[rules]]
 name = "mergesamfiles"
-description = "Merge per-library BAMs with Picard MergeSamFiles (nf-core/picard/mergesamfiles)"
-input = ["results/bwa/library/{pair_id}.Lb.sorted.bam", "{config.fasta}"]
+description = "Merge per-library BAMs with Picard MergeSamFiles (nf-core/picard/mergesamfiles; gathers every {library} — single-library default merges the one .Lb.sorted.bam)"
+expand_inputs = [
+    { pattern = "results/bwa/library/{pair_id}.{library}.sorted.bam", variables = { library = "config.library_ids" } }
+]
+input = ["{config.fasta}"]
 output = ["results/bwa/merged_library/{pair_id}.mLb.sorted.bam"]
 shell = """
 XMX=$(( {effective_memory_mb} * 8 / 10 ))

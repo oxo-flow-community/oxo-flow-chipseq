@@ -177,10 +177,11 @@ preseq lc_extrap -verbose -bam -seed 1 -pe -output {output[0]} {input[0]} 2> {ou
 """
 when = "!config.skip_preseq"
 
+retries = 2
+
 [rules.resources]
 threads = 6
 memory = "36G"
-retries = 2
 
 [rules.environment]
 docker = "quay.io/biocontainers/preseq:3.1.2--h445547b_2"
