@@ -22,7 +22,7 @@ consensus chain once per antibody (see
 
 ### 1. Install oxo-flow
 
-Requires **oxo-flow >= 0.12.0**. The recommended route is the release binary:
+Requires **oxo-flow >= 0.17.0**. The recommended route is the release binary:
 
 ```bash
 curl -fL -o oxo-flow.tar.gz https://github.com/Traitome/oxo-flow/releases/latest/download/oxo-flow-latest-x86_64-unknown-linux-gnu.tar.gz
@@ -171,7 +171,8 @@ ported are listed with reasons.
 | prepare_genome (gunzip/untar, GFFREAD) / samplesheet_check | — | — | **not ported** — compressed-reference gunzip/untar convenience, GFFREAD (GFF3 -> GTF) and samplesheet validation/staging (the port consumes pre-built plain reference files; the samplesheet analogue is `[[pairs]]`). The reference-derivation steps that make sense on plain files ARE ported as gated rules — getchromsizes and the BWA/Bowtie2/Chromap/STAR index builders (rows above) |
 | UMI handling (UMITOOLS_EXTRACT, umi_extract) | — | — | **not ported** — `with_umi=false` is hardcoded in chipseq.nf at 2.1.0 (dead branch; the parameter does not exist) |
 | save_reference / save_trimmed / save_unaligned outputs | — | — | publish branches that are `false` by default upstream; the port always behaves as `save_align_intermeds=true` (intermediates are kept). Upstream 2.1.0 has no `save_mapped` / `save_tracks` params. `save_macs_pileup` IS ported (conditional pileup publication in both macs3 rules) |
-| DUMP_SOFTWARE_VERSIONS / pipeline summary + software versions sections of MultiQC | — | — | **not ported** — Nextflow metadata plumbing (paramsSummaryMap/softwareVersionsToYAML); `multiqc_data/` and `multiqc_plots/` ARE published |
+| DUMP_SOFTWARE_VERSIONS | engine-native export: `oxo-flow report --versions-yml <file> main.oxoflow` | — | oxo-flow ≥ 0.17.0 exports an nf-core-style `versions.yml` derived statically from the workflow declarations: one entry per rule (83 rules) with the pinned container image (registry + tag). Deviation: it is a standalone CI-diff artifact, not a per-process runtime capture — upstream records each tool's runtime version at execution time; the export reflects the pinned versions in the definition (resolved runtime package versions depend on the execution environment). Per-rule `versions.yml` emission inside every command is deliberately not replicated (it would change every rule's command while the default plan stays byte-identical). |
+| pipeline summary + software versions sections of MultiQC | — | — | **not ported** — nf-core template paramsSummaryMap section from Nextflow metadata; `multiqc_data/` and `multiqc_plots/` ARE published. (The software-versions half — DUMP_SOFTWARE_VERSIONS — is covered by the engine-native export above.) |
 | Multi-antibody consensus (`consensus_cluster` grouping) | `macs3_consensus_multi` / `homer_annotate_consensus_multi` / `annotate_boolean_peaks_multi` / `subread_featurecounts_multi` / `deseq2_qc_multi` / `igv_multi` / `multiqc_multi` (+ `*_narrow_multi` variants) | same tools | upstream groups the consensus chain by `meta.antibody` (groupTuple `by: antibody`); the port does the same with the engine's metadata binding — `[workflow] metadata_file` (TSV: sample + antibody columns) + `input_groups` `group_by = "meta.antibody"` runs the consensus chain once per distinct antibody with per-antibody inputs, and the IGV/MultiQC rules collect every antibody. Gated on `config.multi_antibody` (default `false` — the single-antibody `config.antibody` path is byte-identical); see [Multi-antibody runs](#multi-antibody-runs) |
 
 ### Known divergences
