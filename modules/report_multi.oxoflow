@@ -102,6 +102,7 @@ docker = "quay.io/biocontainers/python:3.8.3"
 name = "multiqc_multi"
 description = "Aggregate QC into a MultiQC report (local nf-core/chipseq module, multi-antibody mode)"
 input = [
+    "results/multiqc/workflow_summary_mqc.yaml",
     "results/bwa/merged_library/macs3/broad_peak/qc/macs3_annotatePeaks.summary_mqc.tsv",
 ]
 output = ["results/multiqc/broad_peak/multiqc_report.html"]
@@ -121,6 +122,7 @@ mv multiqc_report.html results/multiqc/broad_peak/
 """
 when = "config.multi_antibody && !config.narrow_peak && !config.skip_multiqc"
 depends_on = [
+    "report::multiqc_workflow_summary",
     "qc::fastqc",
     "qc::trimgalore",
     "align::stats_align",
@@ -184,6 +186,7 @@ docker = "quay.io/biocontainers/multiqc:1.23--pyhdfd78af_0"
 name = "multiqc_narrow_multi"
 description = "Aggregate QC into a MultiQC report (local nf-core/chipseq module, narrow_peak + multi-antibody mode)"
 input = [
+    "results/multiqc/workflow_summary_mqc.yaml",
     "results/bwa/merged_library/macs3/narrow_peak/qc/macs3_annotatePeaks.summary_mqc.tsv",
 ]
 output = ["results/multiqc/narrow_peak/multiqc_report.html"]
@@ -200,6 +203,7 @@ mv multiqc_report.html results/multiqc/narrow_peak/
 """
 when = "config.multi_antibody && config.narrow_peak && !config.skip_multiqc"
 depends_on = [
+    "report::multiqc_workflow_summary",
     "qc::fastqc",
     "qc::trimgalore",
     "align::stats_align",
