@@ -100,9 +100,82 @@ memory = "6G"
 docker = "quay.io/biocontainers/python:3.8.3"
 
 [[rules]]
+name = "multiqc_workflow_summary"
+description = "Generate the MultiQC Workflow Summary custom content (nf-core paramsSummaryMap/paramsSummaryMultiqc template port)"
+output = ["results/multiqc/workflow_summary_mqc.yaml"]
+shell = """
+ENGINE_VERSION="$(command -v oxo-flow >/dev/null 2>&1 && oxo-flow --version | sed 's/^oxo-flow //' || true)"
+[ -n "$ENGINE_VERSION" ] || ENGINE_VERSION="unknown"
+python3 scripts/multiqc_workflow_summary.py \\
+    --out-dir results/multiqc \\
+    --engine-version "$ENGINE_VERSION" \\
+    --engine-command "oxo-flow run main.oxoflow" \\
+    --config fragment_size={config.fragment_size} \\
+    --config seq_center={config.seq_center} \\
+    --config read_length={config.read_length} \\
+    --config multiqc_title={config.multiqc_title} \\
+    --config fasta={config.fasta} \\
+    --config gtf={config.gtf} \\
+    --config bwa_index={config.bwa_index} \\
+    --config bowtie2_index={config.bowtie2_index} \\
+    --config chromap_index={config.chromap_index} \\
+    --config star_index={config.star_index} \\
+    --config gene_bed={config.gene_bed} \\
+    --config macs_gsize={config.macs_gsize} \\
+    --config blacklist={config.blacklist} \\
+    --config clip_r1={config.clip_r1} \\
+    --config clip_r2={config.clip_r2} \\
+    --config three_prime_clip_r1={config.three_prime_clip_r1} \\
+    --config three_prime_clip_r2={config.three_prime_clip_r2} \\
+    --config trim_nextseq={config.trim_nextseq} \\
+    --config skip_trimming={config.skip_trimming} \\
+    --config aligner={config.aligner} \\
+    --config keep_dups={config.keep_dups} \\
+    --config keep_multi_map={config.keep_multi_map} \\
+    --config bwa_min_score={config.bwa_min_score} \\
+    --config narrow_peak={config.narrow_peak} \\
+    --config broad_cutoff={config.broad_cutoff} \\
+    --config macs_fdr={config.macs_fdr} \\
+    --config macs_pvalue={config.macs_pvalue} \\
+    --config min_reps_consensus={config.min_reps_consensus} \\
+    --config save_macs_pileup={config.save_macs_pileup} \\
+    --config skip_peak_qc={config.skip_peak_qc} \\
+    --config skip_peak_annotation={config.skip_peak_annotation} \\
+    --config skip_consensus_peaks={config.skip_consensus_peaks} \\
+    --config skip_fastqc={config.skip_fastqc} \\
+    --config skip_picard_metrics={config.skip_picard_metrics} \\
+    --config skip_preseq={config.skip_preseq} \\
+    --config skip_plot_profile={config.skip_plot_profile} \\
+    --config skip_plot_fingerprint={config.skip_plot_fingerprint} \\
+    --config skip_spp={config.skip_spp} \\
+    --config skip_deseq2_qc={config.skip_deseq2_qc} \\
+    --config skip_igv={config.skip_igv} \\
+    --config skip_multiqc={config.skip_multiqc} \\
+    --config skip_qc={config.skip_qc} \\
+    --config fingerprint_bins={config.fingerprint_bins} \\
+    --config library_ids={config.library_ids} \\
+    --config raw_dir={config.raw_dir} \\
+    --config chrom_sizes={config.chrom_sizes} \\
+    --config fai={config.fai} \\
+    --config antibody={config.antibody} \\
+    --config multi_antibody={config.multi_antibody} \\
+    --config replicates_exist={config.replicates_exist} \\
+    --config multiple_groups={config.multiple_groups}
+"""
+when = "!config.skip_multiqc"
+
+[rules.resources]
+threads = 1
+memory = "6G"
+
+[rules.environment]
+docker = "quay.io/biocontainers/python:3.8.3"
+
+[[rules]]
 name = "multiqc"
 description = "Aggregate QC into a MultiQC report (local nf-core/chipseq module)"
 input = [
+    "results/multiqc/workflow_summary_mqc.yaml",
     "results/bwa/merged_library/macs3/broad_peak/qc/macs3_annotatePeaks.summary_mqc.tsv",
     "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.featureCounts.txt.summary",
     "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/deseq2/{config.antibody}.consensus_peaks.pca.vals_mqc.tsv",
@@ -125,6 +198,7 @@ mv multiqc_report.html results/multiqc/broad_peak/
 """
 when = "!config.multi_antibody && !config.narrow_peak && !config.skip_multiqc"
 depends_on = [
+    "report::multiqc_workflow_summary",
     "qc::fastqc",
     "qc::trimgalore",
     "align::stats_align",
@@ -188,6 +262,7 @@ docker = "quay.io/biocontainers/multiqc:1.23--pyhdfd78af_0"
 name = "multiqc_narrow"
 description = "Aggregate QC into a MultiQC report (local nf-core/chipseq module, narrow_peak mode)"
 input = [
+    "results/multiqc/workflow_summary_mqc.yaml",
     "results/bwa/merged_library/macs3/narrow_peak/qc/macs3_annotatePeaks.summary_mqc.tsv",
     "results/bwa/merged_library/macs3/narrow_peak/consensus/{config.antibody}/{config.antibody}.consensus_peaks.featureCounts.txt.summary",
     "results/bwa/merged_library/macs3/narrow_peak/consensus/{config.antibody}/deseq2/{config.antibody}.consensus_peaks.pca.vals_mqc.tsv",
@@ -207,6 +282,7 @@ mv multiqc_report.html results/multiqc/narrow_peak/
 """
 when = "!config.multi_antibody && config.narrow_peak && !config.skip_multiqc"
 depends_on = [
+    "report::multiqc_workflow_summary",
     "qc::fastqc",
     "qc::trimgalore",
     "align::stats_align",
