@@ -181,7 +181,11 @@ input = [
     "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/deseq2/{config.antibody}.consensus_peaks.pca.vals_mqc.tsv",
     "results/bwa/merged_library/macs3/broad_peak/consensus/{config.antibody}/deseq2/{config.antibody}.consensus_peaks.sample.dists_mqc.tsv",
 ]
-output = ["results/multiqc/broad_peak/multiqc_report.html"]
+output = [
+    "results/multiqc/broad_peak/multiqc_report.html",
+    "results/multiqc/broad_peak/multiqc_data",
+    "results/multiqc/broad_peak/multiqc_plots",
+]
 shell = """
 MQC_ARGS=""
 [ -n "{config.multiqc_title}" ] && MQC_ARGS="--title {config.multiqc_title}"
@@ -268,7 +272,11 @@ input = [
     "results/bwa/merged_library/macs3/narrow_peak/consensus/{config.antibody}/deseq2/{config.antibody}.consensus_peaks.pca.vals_mqc.tsv",
     "results/bwa/merged_library/macs3/narrow_peak/consensus/{config.antibody}/deseq2/{config.antibody}.consensus_peaks.sample.dists_mqc.tsv",
 ]
-output = ["results/multiqc/narrow_peak/multiqc_report.html"]
+output = [
+    "results/multiqc/narrow_peak/multiqc_report.html",
+    "results/multiqc/narrow_peak/multiqc_data",
+    "results/multiqc/narrow_peak/multiqc_plots",
+]
 shell = """
 MQC_ARGS=""
 [ -n "{config.multiqc_title}" ] && MQC_ARGS="--title {config.multiqc_title}"

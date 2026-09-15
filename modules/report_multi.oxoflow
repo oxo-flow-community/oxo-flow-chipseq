@@ -105,7 +105,11 @@ input = [
     "results/multiqc/workflow_summary_mqc.yaml",
     "results/bwa/merged_library/macs3/broad_peak/qc/macs3_annotatePeaks.summary_mqc.tsv",
 ]
-output = ["results/multiqc/broad_peak/multiqc_report.html"]
+output = [
+    "results/multiqc/broad_peak/multiqc_report.html",
+    "results/multiqc/broad_peak/multiqc_data",
+    "results/multiqc/broad_peak/multiqc_plots",
+]
 shell = """
 MQC_ARGS=""
 [ -n "{config.multiqc_title}" ] && MQC_ARGS="--title {config.multiqc_title}"
@@ -189,7 +193,11 @@ input = [
     "results/multiqc/workflow_summary_mqc.yaml",
     "results/bwa/merged_library/macs3/narrow_peak/qc/macs3_annotatePeaks.summary_mqc.tsv",
 ]
-output = ["results/multiqc/narrow_peak/multiqc_report.html"]
+output = [
+    "results/multiqc/narrow_peak/multiqc_report.html",
+    "results/multiqc/narrow_peak/multiqc_data",
+    "results/multiqc/narrow_peak/multiqc_plots",
+]
 shell = """
 MQC_ARGS=""
 [ -n "{config.multiqc_title}" ] && MQC_ARGS="--title {config.multiqc_title}"
