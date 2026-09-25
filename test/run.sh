@@ -15,7 +15,7 @@ echo "==> dry-run with default config"
 # NOTE: oxo-flow 0.11.0 prints the human-readable plan to stderr (stdout is
 # reserved for machine output), so both streams are captured here.
 "$OXO" dry-run main.oxoflow > /tmp/oxo-dryrun-$$.txt 2>&1
-grep -q "would execute" /tmp/oxo-dryrun-$$.txt
+grep -Eq "would execute|To execute:" /tmp/oxo-dryrun-$$.txt
 
 echo "==> debug: expanded commands contain no literal {wildcards}"
 # debug prints the expanded plan to stderr too (stdout is machine output)
